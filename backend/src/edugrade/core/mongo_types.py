@@ -1,11 +1,10 @@
 from bson import ObjectId
-from pydantic import GetCoreSchemaHandler
+from pydantic import GetCoreSchemaHandler, GetJsonSchemaHandler
 from pydantic_core import core_schema
 
 class PyObjectId(ObjectId):
   @classmethod
   def __get_pydantic_core_schema__(cls, source_type, handler: GetCoreSchemaHandler):
-    # Acepta str -> ObjectId y serializa ObjectId -> str
     def validate(v):
       if isinstance(v, ObjectId):
         return v
@@ -13,8 +12,17 @@ class PyObjectId(ObjectId):
         return ObjectId(v)
       raise ValueError("Invalid ObjectId")
 
-    return core_schema.no_info_after_validator_function(
-        validate,
-        core_schema.str_schema(),
-        serialization=core_schema.plain_serializer_function_ser_schema(lambda x: str(x)),
+    return core_schema.no_info_plain_validator_function(
+      validate,
+      serialization=core_schema.plain_serializer_function_ser_schema(lambda x: str(x)),
     )
+  
+  @classmethod
+  def __get_pydantic_json_schema__(cls, core_schema, handler: GetJsonSchemaHandler):
+    schema = handler(core_schema)
+    schema.update(
+      type="string",
+      examples=["507f1f77bcf86cd799439011"],
+      description="MongoDB ObjectId",
+    )
+    return schema

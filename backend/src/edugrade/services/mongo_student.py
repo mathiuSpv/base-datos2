@@ -23,18 +23,21 @@ class StudentService:
 
   async def list(
     self,
+    first_name: str | None,
     last_name: str | None,
     nationality: str | None,
-    birth_date: str | None,
-    limit: int,
-    skip: int,
+    identity: str | None,
+    limit: int = 50,
+    skip: int = 0,
   ) -> list[dict]:
-    limit = min(max(limit, 1), 200)
-    skip = max(skip, 0)
+    if identity and not nationality:
+      raise HTTPException(status_code=400, detail="Nationality is required when identity is provided")
+
     return await self.repo.list(
-      last_name=last_name,
+      first_name=first_name,
+      last_name_like=last_name,
       nationality=nationality,
-      birth_date=birth_date,
+      identity=identity,
       limit=limit,
       skip=skip,
     )

@@ -20,14 +20,15 @@ async def get_student(student_id: str, svc: StudentService = Depends(get_service
 
 @router.get("", response_model=list[StudentOut])
 async def list_students(
-  lastName: str | None = Query(default=None),
+  firstName: str | None = Query(default=None),
+  lastName: str | None = Query(default=None, description="LIKE '%lastName%' (case-insensitive)"),
   nationality: str | None = Query(default=None),
-  birthDate: str | None = Query(default=None, description="YYYY-MM-DD"),
+  identity: str | None = Query(default=None, description="requires nationality"),
   limit: int = Query(default=50, ge=1, le=200),
   skip: int = Query(default=0, ge=0),
   svc: StudentService = Depends(get_service),
 ):
-  return await svc.list(lastName, nationality, birthDate, limit, skip)
+  return await svc.list(firstName, lastName, nationality, identity, limit, skip)
 
 
 @router.delete("/{student_id}", status_code=status.HTTP_204_NO_CONTENT)

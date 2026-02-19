@@ -1,20 +1,17 @@
 from datetime import datetime, timezone, date
 from bson import ObjectId
 from pymongo.errors import DuplicateKeyError
-
-def date_to_datetime_utc(d: date) -> datetime:
-  return datetime(d.year, d.month, d.day, tzinfo=timezone.utc)
+from edugrade.utils.date import date_to_datetime_utc
 
 class StudentRepository:
   def __init__(self, db):
     self.col = db["student"]
 
   async def ensure_indexes(self) -> None:
+    await self.col.create_index([("nationality", 1), ("identity", 1)])
     await self.col.create_index("lastName")
-    await self.col.create_index("nationality")
-    await self.col.create_index([("lastName", 1), ("birthDate", 1)])
-    await self.col.create_index([("firstName", "text"), ("lastName", "text")])
-
+    await self.col.create_index("firstName")
+    
   async def create(self, data: dict) -> dict:
     doc = {
       **data,
@@ -22,12 +19,17 @@ class StudentRepository:
     }
     if isinstance(doc.get("birthDate"), date):
       doc["birthDate"] = date_to_datetime_utc(doc["birthDate"])
+      
+    identity = doc.get("identity")
+    if identity is None or str(identity).strip() == "":
+      doc.pop("identity", None)
     try:
       res = await self.col.insert_one(doc)
     except DuplicateKeyError:
       raise
 
     created = await self.col.find_one({"_id": res.inserted_id})
+    created["_id"] = str(created["_id"])
     return created
 
   async def get_by_id(self, student_id: ObjectId) -> dict | None:
@@ -36,20 +38,26 @@ class StudentRepository:
   async def list(
     self,
     *,
-    last_name: str | None = None,
+    first_name: str | None = None,
+    last_name_like: str | None = None,
     nationality: str | None = None,
-    birth_date: str | None = None,
+    identity: str | None = None,
     limit: int = 50,
     skip: int = 0,
   ) -> list[dict]:
     q: dict = {}
 
-    if last_name:
-      q["lastName"] = last_name
-    if nationality:
+    if identity and nationality:
+      q["identity"] = identity; q["nationality"] = nationality
+      
+    if first_name:
+      q["firstName"] = {"$regex": first_name, "$options": "i"}
+    
+    if last_name_like:
+      q["lastName"] = {"$regex": last_name_like, "$options": "i"}
+      
+    if nationality and "nationality" not in q:
       q["nationality"] = nationality
-    if birth_date:
-      q["birthDate"] = birth_date
 
     cursor = self.col.find(q).sort("createdAt", -1).skip(skip).limit(limit)
     return [doc async for doc in cursor]
