@@ -2,7 +2,14 @@ from fastapi import FastAPI, Request, HTTPException
 from edugrade.config import settings
 from edugrade.startup import lifespan
 
+#cassandra
+from edugrade.audit.middleware import request_context_middleware
+from edugrade.audit.routes import router as audit_router
+
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
+
+app.middleware("http")(request_context_middleware)
+app.include_router(audit_router)
 
 @app.get("/health")
 async def health(request: Request):

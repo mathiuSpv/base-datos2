@@ -8,6 +8,10 @@ import redis.asyncio as redis
 
 from edugrade.config import settings
 
+#Cassandra
+from edugrade.audit.schema import ensure_audit_schema
+from edugrade.audit.logger import AuditLogger
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -21,7 +25,10 @@ async def lifespan(app: FastAPI):
 
     cass_cluster = Cluster(settings.cassandra_hosts, port=settings.cassandra_port)
     cass_session = cass_cluster.connect()
-    
+
+    ensure_audit_schema(cass_session, settings.cassandra_keyspace)
+    app.state.audit_logger = AuditLogger(cass_session, service_name=settings.app_name)
+
     redis_client = redis.from_url(settings.redis_url, decode_responses=True)
 
     app.state.mongo_client = mongo_client
