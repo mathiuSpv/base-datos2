@@ -27,8 +27,8 @@ class StudentService:
     last_name: str | None,
     nationality: str | None,
     identity: str | None,
-    limit: int = 50,
-    skip: int = 0,
+    limit: int,
+    skip: int,
   ) -> list[dict]:
     if identity and not nationality:
       raise HTTPException(status_code=400, detail="Nationality is required when identity is provided")
