@@ -18,11 +18,10 @@ class PyObjectId(ObjectId):
     )
   
   @classmethod
-  def __get_pydantic_json_schema__(cls, core_schema, handler: GetJsonSchemaHandler):
-    schema = handler(core_schema)
-    schema.update(
-      type="string",
+  def __get_pydantic_json_schema__(cls, _core_schema, handler: GetJsonSchemaHandler):
+    json_schema = handler(core_schema.str_schema())
+    json_schema.update(
       examples=["507f1f77bcf86cd799439011"],
       description="MongoDB ObjectId",
     )
-    return schema
+    return json_schema
