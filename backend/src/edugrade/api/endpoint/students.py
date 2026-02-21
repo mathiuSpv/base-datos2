@@ -14,7 +14,11 @@ async def create_student(
   payload: StudentCreate, 
   audit: AuditContext = Depends(get_audit_context),
   svc: StudentService = Depends(get_service)):
-  return await svc.create(payload.model_dump(), audit=audit)
+  mongo_response = await svc.create(payload.model_dump(), audit=audit)
+  if mongo_response is None:
+    return None
+  return 
+
 
 
 @router.get("/{student_id}", response_model=StudentOut)
