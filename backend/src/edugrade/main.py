@@ -3,7 +3,6 @@ from edugrade.config import settings
 from edugrade.startup import lifespan
 from edugrade.api.router import router as api_router
 from edugrade.audit.middleware import request_context_middleware
-from edugrade.audit.routes import router as audit_router
 
 app = FastAPI(
     title=settings.app_name, 
@@ -16,6 +15,7 @@ app.include_router(api_router)
 
 app.middleware("http")(request_context_middleware)
 app.include_router(audit_router)
+
 
 @app.get("/health")
 async def health(request: Request):

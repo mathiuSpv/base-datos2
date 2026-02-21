@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, Query, status, Request
 from edugrade.audit.context import AuditContext, get_audit_context
 from edugrade.core.db import get_mongo_db
-from edugrade.schemas.mongo_student import StudentCreate, StudentOut
-from edugrade.services.mongo_student import StudentService
+from edugrade.schemas.mongo.student import StudentCreate, StudentOut
+from edugrade.services.mongo.student import StudentService
 
 router = APIRouter(prefix="/students", tags=["students"])
 
