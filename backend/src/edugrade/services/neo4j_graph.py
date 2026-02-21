@@ -35,11 +35,11 @@ class Neo4jGraphService:
     def link_took(
         self,
         studentMongoId: str,
-        subjectNeoId: str,
+        subjectId: str,   # UUID (sub.id)
         year: int,
         grade: str,
     ):
-        return self.repo.link_took(studentMongoId, subjectNeoId, year, grade)
+        return self.repo.link_took(studentMongoId, subjectId, year, grade)
 
     # def link_equivalent_to(
     #     self,

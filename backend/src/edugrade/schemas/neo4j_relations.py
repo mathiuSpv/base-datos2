@@ -16,7 +16,7 @@ class StudiesAtIn(BaseModel):
 
 class TookIn(BaseModel):
     studentMongoId: str
-    subjectNeoId: str
+    subjectId: str # antes era subjectNeoId
     year: int # Ejemplo: 2023
     grade: str # Ejemplo: "S6" (Secundaria 6to) | quitar optional | grade se trae del front
 

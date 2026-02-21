@@ -28,8 +28,8 @@ class Neo4jGraphRepository:
                 FOR (i:Institution) REQUIRE i.mongoId IS UNIQUE
             """)
             session.run("""
-                CREATE CONSTRAINT subject_unique IF NOT EXISTS
-                FOR (sub:Subject) REQUIRE (sub.name, sub.institutionMongoId) IS UNIQUE
+                CREATE CONSTRAINT subject_id IF NOT EXISTS
+                FOR (sub:Subject) REQUIRE sub.id IS UNIQUE;
             """)
             
     # ---------- UPSERT NODES ----------
@@ -55,7 +55,8 @@ class Neo4jGraphRepository:
     def upsert_subject(self, name: str, institutionMongoId: str) -> Dict[str, Any]:
         cypher = f"""
         MERGE (sub:{LABEL_SUBJECT} {{name: $name, institutionMongoId: $institutionMongoId}})
-        RETURN id(sub) AS id, sub.name AS name, sub.institutionMongoId AS institutionMongoId
+        ON CREATE SET sub.id = randomUUID()
+        RETURN sub.id AS id, sub.name AS name, sub.institutionMongoId AS institutionMongoId
         """
         params = {"name": name, "institutionMongoId": institutionMongoId}
         with self.driver.session() as session:
@@ -101,14 +102,13 @@ class Neo4jGraphRepository:
     def link_took(
         self,
         studentMongoId: str,
-        subjectNeoId: str,
+        subjectId: str,   # ahora es UUID
         year: int,
         grade: str,
     ) -> Dict[str, Any]:
         cypher = f"""
         MATCH (s:{LABEL_STUDENT} {{mongoId: $studentMongoId}})
-        MATCH (sub:{LABEL_SUBJECT})
-        WHERE id(sub) = $subjectNeoId
+        MATCH (sub:{LABEL_SUBJECT} {{id: $subjectId}})
         MERGE (s)-[r:{REL_TOOK}]->(sub)
         SET r.year  = $year,
             r.grade = $grade
@@ -116,14 +116,14 @@ class Neo4jGraphRepository:
         """
         params = {
             "studentMongoId": studentMongoId,
-            "subjectNeoId": int(subjectNeoId),  # Neo internal id es int
+            "subjectId": subjectId,  # UUID string
             "year": year,
             "grade": grade,
         }
         with self.driver.session() as session:
             rec = session.run(cypher, params).single()
             if rec is None:
-                raise ValueError(f"Not found: studentMongoId={studentMongoId} or subjectNeoId={subjectNeoId}")
+                raise ValueError(f"Not found: studentMongoId={studentMongoId} or subjectId={subjectId}")
             return dict(rec["r"])
 
     # def link_equivalent_to(
@@ -153,7 +153,7 @@ class Neo4jGraphRepository:
     def get_student_subjects(self, studentMongoId: str) -> List[Dict[str, Any]]:
         cypher = f"""
         MATCH (s:{LABEL_STUDENT} {{mongoId: $studentMongoId}})-[r:{REL_TOOK}]->(sub:{LABEL_SUBJECT})
-        RETURN id(sub) AS subjectId, sub, r
+        RETURN sub.id AS subjectId, sub, r
         ORDER BY coalesce(r.year, 0) DESC
         """
         with self.driver.session() as session:
