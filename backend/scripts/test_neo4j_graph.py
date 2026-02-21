@@ -8,16 +8,16 @@ def main():
     inst_id_1  = "65f000000000000000000101"
     inst_id_2  = "65f000000000000000000102"
 
-    # 1) upsert student/institutions
-    print("Upsert student:", neo.upsert_student(student_id, "Mike Test", "AR"))
-    print("Upsert inst1:", neo.upsert_institution(inst_id_1, "UADE", "AR"))
-    print("Upsert inst2:", neo.upsert_institution(inst_id_2, "UBA", "AR"))
+    # 1) upsert student/institutions (solo mongoId)
+    print("Upsert student:", neo.upsert_student(student_id))
+    print("Upsert inst1:", neo.upsert_institution(inst_id_1))
+    print("Upsert inst2:", neo.upsert_institution(inst_id_2))
 
-    # 2) link studies_at
+    # 2) link studies_at (startDate obligatorio)
     print("Link studies_at UADE:", neo.link_studies_at(student_id, inst_id_1, "2022-03-01", "2024-12-01"))
     print("Link studies_at UBA:", neo.link_studies_at(student_id, inst_id_2, "2025-03-01", None))
 
-    # 3) upsert subjects (Neo) y link took
+    # 3) upsert subjects (Neo) y link took (year/grade obligatorios)
     sub1 = neo.upsert_subject("Programación 1")
     sub2 = neo.upsert_subject("Programación Algorítmica")
     sub3 = neo.upsert_subject("Algoritmos 1")

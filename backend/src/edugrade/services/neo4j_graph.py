@@ -12,21 +12,33 @@ class Neo4jGraphService:
 
     # ---------- UPSERTS ----------
 
-    def upsert_student(self, mongoId: str, fullName: str, nationality: str | None = None):
-        return self.repo.upsert_student(mongoId, fullName, nationality)
+    def upsert_student(self, mongoId: str):
+        return self.repo.upsert_student(mongoId)
 
-    def upsert_institution(self, mongoId: str, name: str, country: str | None = None):
-        return self.repo.upsert_institution(mongoId, name, country)
+    def upsert_institution(self, mongoId: str):
+        return self.repo.upsert_institution(mongoId)
 
     def upsert_subject(self, name: str):
         return self.repo.upsert_subject(name)
 
     # ---------- RELATIONSHIPS ----------
 
-    def link_studies_at(self, studentMongoId: str, institutionMongoId: str, startDate: str | None = None, endDate: str | None = None):
+    def link_studies_at(
+        self,
+        studentMongoId: str,
+        institutionMongoId: str,
+        startDate: str,
+        endDate: str | None = None,
+    ):
         return self.repo.link_studies_at(studentMongoId, institutionMongoId, startDate, endDate)
 
-    def link_took(self, studentMongoId: str, subjectNeoId: str, year: int | None = None, grade: str | None = None):
+    def link_took(
+        self,
+        studentMongoId: str,
+        subjectNeoId: str,
+        year: int,
+        grade: str,
+    ):
         return self.repo.link_took(studentMongoId, subjectNeoId, year, grade)
 
     # def link_equivalent_to(

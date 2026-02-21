@@ -7,7 +7,7 @@ from typing import Optional
 class StudiesAtIn(BaseModel):
     studentMongoId: str
     institutionMongoId: str
-    startDate: Optional[str] = None  # ISO string, tipo "2018-03-01"
+    startDate: str # ISO string, tipo "2018-03-01"
     endDate: Optional[str] = None # ISO string, SINO USAMOS ->  Optional[date] = None
 
 ''' S (Student) -> M (Subject) '''
@@ -17,11 +17,16 @@ class StudiesAtIn(BaseModel):
 class TookIn(BaseModel):
     studentMongoId: str
     subjectNeoId: str
-    year: Optional[int] = None # Ejemplo: 2023
-    grade: Optional[str] = None # Ejemplo: "S6" (Secundaria 6to)
+    year: int # Ejemplo: 2023
+    grade: str # Ejemplo: "S6" (Secundaria 6to) | quitar optional | grade se trae del front
 
 #class EquivalentToIn(BaseModel):  # NO SE USA PORQUE NO ESTAMOS VIENDO EQUIVALENCIAS, SINO TRAYECTORIA ACADÉMICA
 #    fromSubjectId: str
 #    toSubjectId: str
 #    confidence: Optional[float] = 1.0
 #    source: Optional[str] = None
+#    endpoint de generar correlatividad de alta y baja de correlatividad
+
+
+# endpoint, lo que se debe hacer es las call de los service, pero sin aplicar lógica
+# 

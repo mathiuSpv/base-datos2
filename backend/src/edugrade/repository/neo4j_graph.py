@@ -34,37 +34,22 @@ class Neo4jGraphRepository:
             
     # ---------- UPSERT NODES ----------
 
-    def upsert_student(self, mongoId: str, fullName: str, nationality: Optional[str] = None) -> Dict[str, Any]:
+    def upsert_student(self, mongoId: str) -> Dict[str, Any]:
         cypher = f"""
         MERGE (s:{LABEL_STUDENT} {{mongoId: $mongoId}})
-        SET s.fullName = $fullName,
-            s.nationality = $nationality
         RETURN s
         """
-        params = {"mongoId": mongoId, "fullName": fullName, "nationality": nationality}
         with self.driver.session() as session:
-            rec = session.run(cypher, params).single()
+            rec = session.run(cypher, {"mongoId": mongoId}).single()
             return dict(rec["s"])
 
-    def upsert_institution(
-        self,
-        mongoId: str,
-        name: str,
-        country: Optional[str] = None,
-    ) -> Dict[str, Any]:
+    def upsert_institution(self, mongoId: str) -> Dict[str, Any]:
         cypher = f"""
         MERGE (i:{LABEL_INSTITUTION} {{mongoId: $mongoId}})
-        SET i.name    = $name,
-            i.country = $country
         RETURN i
         """
-        params = {
-            "mongoId": mongoId,
-            "name": name,
-            "country": country,
-        }
         with self.driver.session() as session:
-            rec = session.run(cypher, params).single()
+            rec = session.run(cypher, {"mongoId": mongoId}).single()
             return dict(rec["i"])
 
     def upsert_subject(self, name: str) -> Dict[str, Any]:
@@ -87,32 +72,36 @@ class Neo4jGraphRepository:
         self,
         studentMongoId: str,
         institutionMongoId: str,
-        startDate: Optional[str] = None,
+        startDate: str,
         endDate: Optional[str] = None,
     ) -> Dict[str, Any]:
         cypher = f"""
         MATCH (s:{LABEL_STUDENT} {{mongoId: $studentMongoId}})
         MATCH (i:{LABEL_INSTITUTION} {{mongoId: $institutionMongoId}})
-        MERGE (s)-[r:{REL_STUDIES_AT}]->(i)
-        SET r.startDate = $startDate,
-            r.endDate   = $endDate
+        MERGE (s)-[r:{REL_STUDIES_AT} {{startDate: $startDate}}]->(i)
+        SET r.endDate = $endDate
         RETURN r
         """
-        params = {"studentMongoId": studentMongoId, "institutionMongoId": institutionMongoId, "startDate": startDate, "endDate": endDate}
+        params = {
+            "studentMongoId": studentMongoId,
+            "institutionMongoId": institutionMongoId,
+            "startDate": startDate,
+            "endDate": endDate,
+        }
         with self.driver.session() as session:
             rec = session.run(cypher, params).single()
             if rec is None:
-                raise ValueError(f"Not found: studentMongoId={studentMongoId} or institutionMongoId={institutionMongoId}")
-            # Si studentMongoId o institutionId no existe, match no encuentra nada: single(), sin esto devuelve None
-            # mismo procedimiento en link_* took y equivalent_to
+                raise ValueError(
+                    f"Not found: studentMongoId={studentMongoId} or institutionMongoId={institutionMongoId}"
+                )
             return dict(rec["r"])
 
     def link_took(
         self,
         studentMongoId: str,
         subjectNeoId: str,
-        year: Optional[int] = None,
-        grade: Optional[str] = None,
+        year: int,
+        grade: str,
     ) -> Dict[str, Any]:
         cypher = f"""
         MATCH (s:{LABEL_STUDENT} {{mongoId: $studentMongoId}})
