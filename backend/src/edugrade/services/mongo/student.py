@@ -1,6 +1,6 @@
 from bson import ObjectId
 from fastapi import HTTPException
-from edugrade.repository.mongo_student import StudentRepository
+from edugrade.repository.mongo.student import StudentRepository
 
 class StudentService:
   def __init__(self, db):

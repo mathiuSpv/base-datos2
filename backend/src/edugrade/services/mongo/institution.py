@@ -1,6 +1,6 @@
 from bson import ObjectId
 from fastapi import HTTPException
-from edugrade.repository.mongo_institution import InstitutionRepository
+from edugrade.repository.mongo.institution import InstitutionRepository
 
 
 class InstitutionService:
