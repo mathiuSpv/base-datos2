@@ -1,14 +1,12 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 
 class SubjectUpsertIn(BaseModel):
-    mongoId: str
-    name: str
-    area: Optional[str] = None
-    level: Optional[str] = None
+    name: str = Field(min_length=1, max_length=50)
+#    area: Optional[str] = None si se quiere poner algo como matemática, ciencias, lenguaje
+
 
 class SubjectOut(BaseModel):
-    mongoId: str
+    id: str  # Neo4j id (devuelve string)
     name: str
-    area: Optional[str] = None
-    level: Optional[str] = None
+#    area: Optional[str] = None
