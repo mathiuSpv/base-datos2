@@ -1,16 +1,20 @@
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, status, Request
+from edugrade.audit.context import AuditContext, get_audit_context
 from edugrade.core.db import get_mongo_db
 from edugrade.schemas.mongo.student import StudentCreate, StudentOut
 from edugrade.services.mongo.student import StudentService
 
 router = APIRouter(prefix="/students", tags=["students"])
 
-def get_service(db=Depends(get_mongo_db)) -> StudentService:
-  return StudentService(db)
+def get_service(request: Request, db=Depends(get_mongo_db)) -> StudentService:
+  return StudentService(db, request.app.state.audit_logger)
 
 @router.post("", response_model=StudentOut, status_code=status.HTTP_201_CREATED)
-async def create_student(payload: StudentCreate, svc: StudentService = Depends(get_service)):
-  return await svc.create(payload.model_dump())
+async def create_student(
+  payload: StudentCreate, 
+  audit: AuditContext = Depends(get_audit_context),
+  svc: StudentService = Depends(get_service)):
+  return await svc.create(payload.model_dump(), audit=audit)
 
 
 @router.get("/{student_id}", response_model=StudentOut)
@@ -32,6 +36,9 @@ async def list_students(
 
 
 @router.delete("/{student_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_student(student_id: str, svc: StudentService = Depends(get_service)):
-  await svc.delete(student_id)
+async def delete_student(
+  student_id: str, 
+  audit: AuditContext = Depends(get_audit_context),
+  svc: StudentService = Depends(get_service)):
+  await svc.delete(student_id, audit=audit)
   return None
