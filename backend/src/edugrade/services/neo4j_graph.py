@@ -18,8 +18,8 @@ class Neo4jGraphService:
     def upsert_institution(self, mongoId: str):
         return self.repo.upsert_institution(mongoId)
 
-    def upsert_subject(self, name: str):
-        return self.repo.upsert_subject(name)
+    def upsert_subject(self, name: str, institutionMongoId: str):
+        return self.repo.upsert_subject(name, institutionMongoId)
 
     # ---------- RELATIONSHIPS ----------
 

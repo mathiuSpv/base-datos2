@@ -28,8 +28,8 @@ class Neo4jGraphRepository:
                 FOR (i:Institution) REQUIRE i.mongoId IS UNIQUE
             """)
             session.run("""
-                CREATE CONSTRAINT subject_name IF NOT EXISTS
-                FOR (sub:Subject) REQUIRE sub.name IS UNIQUE
+                CREATE CONSTRAINT subject_unique IF NOT EXISTS
+                FOR (sub:Subject) REQUIRE (sub.name, sub.institutionMongoId) IS UNIQUE
             """)
             
     # ---------- UPSERT NODES ----------
@@ -52,18 +52,20 @@ class Neo4jGraphRepository:
             rec = session.run(cypher, {"mongoId": mongoId}).single()
             return dict(rec["i"])
 
-    def upsert_subject(self, name: str) -> Dict[str, Any]:
+    def upsert_subject(self, name: str, institutionMongoId: str) -> Dict[str, Any]:
         cypher = f"""
-        MERGE (sub:{LABEL_SUBJECT} {{name: $name}})
-        RETURN id(sub) AS id, sub.name AS name
+        MERGE (sub:{LABEL_SUBJECT} {{name: $name, institutionMongoId: $institutionMongoId}})
+        RETURN id(sub) AS id, sub.name AS name, sub.institutionMongoId AS institutionMongoId
         """
+        params = {"name": name, "institutionMongoId": institutionMongoId}
         with self.driver.session() as session:
-            rec = session.run(cypher, {"name": name}).single()
+            rec = session.run(cypher, params).single()
             if rec is None:
                 raise ValueError("Failed to upsert subject")
             return {
                 "id": str(rec["id"]),
                 "name": rec["name"],
+                "institutionMongoId": rec["institutionMongoId"],
             }
 
     # ---------- RELATIONSHIPS ----------
