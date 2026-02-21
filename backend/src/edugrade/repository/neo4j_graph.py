@@ -18,19 +18,20 @@ class Neo4jGraphRepository:
         self.driver = driver
 
     def ensure_constraints(self) -> None:
-        cypher = """
-        CREATE CONSTRAINT student_mongoId IF NOT EXISTS
-        FOR (s:Student) REQUIRE s.mongoId IS UNIQUE;
-
-        CREATE CONSTRAINT institution_mongoId IF NOT EXISTS
-        FOR (i:Institution) REQUIRE i.mongoId IS UNIQUE;
-
-        CREATE CONSTRAINT subject_name IF NOT EXISTS
-        FOR (sub:Subject) REQUIRE sub.name IS UNIQUE;
-        """
         with self.driver.session() as session:
-            session.run(cypher)
-
+            session.run("""
+                CREATE CONSTRAINT student_mongoId IF NOT EXISTS
+                FOR (s:Student) REQUIRE s.mongoId IS UNIQUE
+            """)
+            session.run("""
+                CREATE CONSTRAINT institution_mongoId IF NOT EXISTS
+                FOR (i:Institution) REQUIRE i.mongoId IS UNIQUE
+            """)
+            session.run("""
+                CREATE CONSTRAINT subject_name IF NOT EXISTS
+                FOR (sub:Subject) REQUIRE sub.name IS UNIQUE
+            """)
+            
     # ---------- UPSERT NODES ----------
 
     def upsert_student(self, mongoId: str, fullName: str, nationality: Optional[str] = None) -> Dict[str, Any]:
