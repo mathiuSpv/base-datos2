@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from backend.src.edugrade.schemas.neo4j.relations import EquivalentToIn
+from edugrade.schemas.neo4j.relations import EquivalentToIn
 from edugrade.services.neo4j_graph import get_neo4j_service, Neo4jGraphService
 
 router = APIRouter(prefix="/equivalences", tags=["equivalences"])

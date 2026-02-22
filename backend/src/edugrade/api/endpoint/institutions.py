@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from backend.src.edugrade.schemas.neo4j.student import StudentOut
-from backend.src.edugrade.services.mongo.student import StudentService
+from edugrade.schemas.neo4j.student import StudentOut
+from edugrade.services.mongo.student import StudentService
 from edugrade.schemas.mongo.institution import InstitutionCreate, InstitutionOut
 from edugrade.services.mongo.institution import InstitutionService
 from edugrade.core.db import get_mongo_db
 from edugrade.services.neo4j_graph import Neo4jGraphService, get_neo4j_service
-from backend.src.edugrade.schemas.neo4j.subject import SubjectOut, SubjectUpsertIn
+from edugrade.schemas.neo4j.subject import SubjectOut, SubjectUpsertIn
 
 router = APIRouter(prefix="/institutions", tags=["institutions"])
 
