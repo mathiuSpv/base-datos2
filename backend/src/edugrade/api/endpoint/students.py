@@ -1,8 +1,11 @@
-from fastapi import APIRouter, Depends, Query, status, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
+from fastapi.responses import JSONResponse
 from edugrade.audit.context import AuditContext, get_audit_context
 from edugrade.core.db import get_mongo_db
 from edugrade.schemas.mongo.student import StudentCreate, StudentOut
 from edugrade.services.mongo.student import StudentService
+from edugrade.services.neo4j_graph import Neo4jGraphService, get_neo4j_service
+from edugrade.services.student_history import StudentHistoryService
 
 router = APIRouter(prefix="/students", tags=["students"])
 
@@ -13,8 +16,15 @@ def get_service(request: Request, db=Depends(get_mongo_db)) -> StudentService:
 async def create_student(
   payload: StudentCreate, 
   audit: AuditContext = Depends(get_audit_context),
-  svc: StudentService = Depends(get_service)):
-  return await svc.create(payload.model_dump(), audit=audit)
+  svc: StudentService = Depends(get_service),
+  neo: Neo4jGraphService = Depends(get_neo4j_service)):
+  mongo_response = await svc.create(payload.model_dump(), audit=audit)
+  if isinstance(mongo_response, dict):
+    student_id = mongo_response.get("id") or mongo_response.get("_id")
+  if not student_id:
+    raise HTTPException(status_code=500, detail="Student created in Mongo but id not found in response")
+  neo.upsert_student(student_id)
+  return mongo_response
 
 
 @router.get("/{student_id}", response_model=StudentOut)
@@ -34,11 +44,21 @@ async def list_students(
 ):
   return await svc.list(firstName, lastName, nationality, identity, limit, skip)
 
-
 @router.delete("/{student_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_student(
   student_id: str, 
   audit: AuditContext = Depends(get_audit_context),
-  svc: StudentService = Depends(get_service)):
+  svc: StudentService = Depends(get_service),
+  neo: Neo4jGraphService = Depends(get_neo4j_service)):
   await svc.delete(student_id, audit=audit)
-  return None
+  neo.delete_student(student_id)
+  return "0"
+
+def get_history_service(db=Depends(get_mongo_db), neo: Neo4jGraphService = Depends(get_neo4j_service)):
+  return StudentHistoryService(db, neo)
+
+@router.get("/{student_id}/history")
+async def get_student_history(
+  student_id: str, 
+  history_svc: StudentHistoryService = Depends(get_history_service)):
+  return await history_svc.get_history(student_id)

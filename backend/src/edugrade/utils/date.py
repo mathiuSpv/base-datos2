@@ -2,15 +2,15 @@ from __future__ import annotations
 from datetime import datetime, date, timezone
 
 def date_to_datetime_utc(d: date) -> datetime:
-    return datetime(
-        year=d.year,
-        month=d.month,
-        day=d.day,
-        hour=0,
-        minute=0,
-        second=0,
-        tzinfo=timezone.utc,
-    )
+  return datetime(
+    year=d.year,
+    month=d.month,
+    day=d.day,
+    hour=0,
+    minute=0,
+    second=0,
+    tzinfo=timezone.utc,
+  )
 
 def ensure_date(value, field_name: str) -> date:
   if value is None:

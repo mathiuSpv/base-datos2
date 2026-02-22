@@ -7,14 +7,14 @@ from edugrade.services.mongo.grade import GradeService
 
 router = APIRouter(prefix="/exams", tags=["exams"])
 
-def get_service(request: Request,db=Depends(get_mongo_db)) -> GradeService:
-  return GradeService(db, request.app.state.audit_logger)
+def get_service(db=Depends(get_mongo_db)) -> GradeService:
+  return GradeService(db)
 
 @router.post("", response_model=GradeOut, status_code=status.HTTP_201_CREATED)
 async def create_exam(
-    payload: GradeCreate, 
-    audit: AuditContext = Depends(get_audit_context),
-    svc: GradeService = Depends(get_service)):
+  payload: GradeCreate, 
+  audit: AuditContext = Depends(get_audit_context),
+  svc: GradeService = Depends(get_service)):
   return await svc.create(payload.model_dump(), audit=audit)
 
 @router.get("/{exam_id}", response_model=GradeOut)
@@ -27,14 +27,24 @@ async def get_exam(
 
 @router.get("", response_model=list[GradeOut])
 async def list_exams(
-  subjectId: str | None = Query(default=None),
-  studentId: str | None = Query(default=None),
-  institutionId: str | None = Query(default=None),
+  subjectId: str = Query(..., min_length=1),
+  studentId: str = Query(..., min_length=1),
+  institutionId: str = Query(..., min_length=1),
   fromDate: date = Query(...),
   toDate: date = Query(...),
   limit: int = Query(default=50, ge=1, le=200),
   skip: int = Query(default=0, ge=0),
-  targetSystem: str | None = Query(default=None, description="None => original; 'ZA' => ZA; other => convert from ZA to that system"),
+  targetSystem: str | None = Query(
+    default=None,
+    description="None => original; 'ZA' => ZA; other => convert from ZA to that system"
+  ),
   svc: GradeService = Depends(get_service),
 ):
   return await svc.list_projected(subjectId, studentId, institutionId, fromDate, toDate, limit, skip, targetSystem)
+
+@router.delete("/{exam_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_exam(
+  exam_id: str,
+  svc: GradeService = Depends(get_service),
+  ):
+  await svc.delete(exam_id)

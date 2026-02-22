@@ -5,6 +5,7 @@ from edugrade.audit.context import AuditContext
 from edugrade.audit.exec import audited
 
 
+
 class StudentService:
   def __init__(self, db, audit_logger):
     self.repo = StudentRepository(db)

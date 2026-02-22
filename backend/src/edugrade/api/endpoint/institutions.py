@@ -1,24 +1,52 @@
-from fastapi import APIRouter, Depends, Query, status, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
+from edugrade.schemas.neo4j.student import StudentOut
+from edugrade.services.mongo.student import StudentService
 from edugrade.schemas.mongo.institution import InstitutionCreate, InstitutionOut
 from edugrade.services.mongo.institution import InstitutionService
-from edugrade.audit.context import AuditContext, get_audit_context
 from edugrade.core.db import get_mongo_db
+from edugrade.services.neo4j_graph import Neo4jGraphService, get_neo4j_service
+from edugrade.schemas.neo4j.subject import SubjectOut, SubjectUpsertIn
+from edugrade.audit.context import AuditContext, get_audit_context
+
 
 router = APIRouter(prefix="/institutions", tags=["institutions"])
 
 def get_service(db=Depends(get_mongo_db)) -> InstitutionService:
   return InstitutionService(db, request.app.state.audit_logger)
 
+def get_student_service(db=Depends(get_mongo_db)) -> StudentService:
+  return StudentService(db)
+
+def svc_dep() -> Neo4jGraphService:
+  return get_neo4j_service()
+
 @router.post("", response_model=InstitutionOut, status_code=status.HTTP_201_CREATED)
 async def create_institution(
-    payload: InstitutionCreate, 
-    audit: AuditContext = Depends(get_audit_context),
-    svc: InstitutionService = Depends(get_service)):
-  return await svc.create(payload.model_dump(), audit=audit)
+  payload: InstitutionCreate,
+  audit: AuditContext = Depends(get_audit_context),
+  svc: InstitutionService = Depends(get_service),
+  neo: Neo4jGraphService = Depends(get_neo4j_service)):
+  mongo_response = await svc.create(payload.model_dump(),audit=audit)
+  if isinstance(mongo_response, dict):
+    institution_id = mongo_response.get("id") or mongo_response.get("_id")
+  if not institution_id:
+    raise HTTPException(status_code=500, detail="Institution created in Mongo but id not found in response")
+  neo.upsert_institution(str(institution_id))
+  return mongo_response
 
 @router.get("/{institution_id}", response_model=InstitutionOut)
 async def get_institution(institution_id: str, svc: InstitutionService = Depends(get_service)):
   return await svc.get(institution_id)
+
+@router.get("/{institutionMongoId}/subjects", response_model=list[SubjectOut])
+def get_subjects_by_institution(
+    institutionMongoId: str,
+    svc: Neo4jGraphService = Depends(svc_dep),
+):
+    try:
+      return svc.get_subjects_by_institution(institutionMongoId)
+    except Exception as e:
+      raise HTTPException(status_code=400, detail=str(e))
 
 @router.get("", response_model=list[InstitutionOut])
 async def list_institutions(
@@ -30,3 +58,40 @@ async def list_institutions(
   svc: InstitutionService = Depends(get_service),
 ):
   return await svc.list(name, country, address, limit, skip)
+
+@router.get("/by-student/{student_id}", response_model=list[InstitutionOut])
+async def list_institutions_for_student(
+  student_id: str,
+  svc: InstitutionService = Depends(get_service),
+  neo: Neo4jGraphService = Depends(get_neo4j_service)):
+  institution_ids = neo.get_student_institutions(student_id)
+  results: list[InstitutionOut] = []
+  for institution_id in institution_ids:
+    inst = await svc.get(institution_id)
+    if inst is not None:
+      results.append(inst)
+
+  return results
+
+@router.get("/{institution_id}/students", response_model=list[StudentOut])
+async def list_students_for_institution(
+  institution_id: str,
+  student_svc: StudentService = Depends(get_student_service),
+  neo: Neo4jGraphService = Depends(get_neo4j_service)
+):
+  student_ids: list[str] = neo.get_students_by_institution(institution_id)
+
+  out: list[StudentOut] = []
+  for sid in student_ids:
+    out.append(await student_svc.get(sid))
+
+  return out
+
+@router.post("/{institution_id}/subjects", response_model=SubjectOut, status_code=status.HTTP_201_CREATED)
+async def create_subject_for_institution(
+    institution_id: str,
+    payload: SubjectUpsertIn,
+    neo: Neo4jGraphService = Depends(get_neo4j_service),
+):
+    subject = neo.upsert_subject(payload.name, institution_id)
+    return subject

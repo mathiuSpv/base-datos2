@@ -51,7 +51,9 @@ dependencies = [
     { name = "fastapi" },
     { name = "motor" },
     { name = "neo4j" },
+    { name = "pydantic" },
     { name = "pydantic-settings" },
+    { name = "python-dotenv" },
     { name = "redis" },
     { name = "uvicorn" },
 ]
@@ -62,7 +64,9 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.129.0" },
     { name = "motor", specifier = ">=3.7.1" },
     { name = "neo4j", specifier = ">=6.1.0" },
+    { name = "pydantic", specifier = ">=2.12.5" },
     { name = "pydantic-settings", specifier = ">=2.13.0" },
+    { name = "python-dotenv", specifier = ">=1.2.1" },
     { name = "redis", specifier = ">=7.2.0" },
     { name = "uvicorn", specifier = ">=0.41.0" },
 ]
