@@ -14,6 +14,9 @@ class Neo4jGraphService:
 
     def upsert_student(self, mongoId: str):
         return self.repo.upsert_student(mongoId)
+    
+    def delete_student(self, mongoId: str):
+        return self.repo.delete_student(mongoId)
 
     def upsert_institution(self, mongoId: str):
         return self.repo.upsert_institution(mongoId)

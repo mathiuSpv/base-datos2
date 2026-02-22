@@ -46,6 +46,19 @@ class Neo4jGraphRepository:
         with self.driver.session() as session:
             rec = session.run(cypher, {"mongoId": mongoId}).single()
             return dict(rec["s"])
+        
+    def delete_student(self, mongoId: str) -> Dict[str, Any]:
+        cypher = f"""
+        MATCH (s:{LABEL_STUDENT} {{mongoId: $mongoId}})
+        WITH s, s.mongoId AS id
+        DETACH DELETE s
+        RETURN id AS mongoId
+        """
+        with self.driver.session() as session:
+            rec = session.run(cypher, {"mongoId": mongoId}).single()
+            if rec is None:
+                return {"deleted": False, "mongoId": mongoId}
+            return {"deleted": True, "mongoId": rec["mongoId"]}
 
     def upsert_institution(self, mongoId: str) -> Dict[str, Any]:
         cypher = f"""
