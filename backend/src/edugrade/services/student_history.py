@@ -8,6 +8,9 @@ from edugrade.services.neo4j_graph import Neo4jGraphService
 from edugrade.repository.mongo.institution import InstitutionRepository
 from edugrade.utils.object_id import is_objectid_hex
 
+import asyncio
+async def _neo(callable_, *args, **kwargs):
+    return await asyncio.to_thread(callable_, *args, **kwargs)
 
 def _year_start(y: int) -> date:
   return date(y, 1, 1)
@@ -31,8 +34,8 @@ class StudentHistoryService:
     if not is_objectid_hex(student_id):
       raise HTTPException(status_code=400, detail="Invalid studentId")
 
-    enrollments = self.neo.get_student_enrollments(student_id)
-    subjects = self.neo.get_student_subject_rows(student_id)
+    enrollments = await _neo(self.neo.get_student_enrollments, student_id)
+    subjects = await _neo(self.neo.get_student_subject_rows, student_id)
 
     if not enrollments:
       return {"years": []}

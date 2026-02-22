@@ -6,8 +6,12 @@ from edugrade.services.mongo.institution import InstitutionService
 from edugrade.core.db import get_mongo_db
 from edugrade.services.neo4j_graph import Neo4jGraphService, get_neo4j_service
 from edugrade.schemas.neo4j.subject import SubjectOut, SubjectUpsertIn
+import asyncio
 
 router = APIRouter(prefix="/institutions", tags=["institutions"])
+
+async def _neo(callable_, *args, **kwargs):
+    return await asyncio.to_thread(callable_, *args, **kwargs)
 
 def get_service(db=Depends(get_mongo_db)) -> InstitutionService:
   return InstitutionService(db)
@@ -22,13 +26,18 @@ def svc_dep() -> Neo4jGraphService:
 async def create_institution(
   payload: InstitutionCreate,
   svc: InstitutionService = Depends(get_service),
-  neo: Neo4jGraphService = Depends(get_neo4j_service)):
+  neo: Neo4jGraphService = Depends(get_neo4j_service),
+):
   mongo_response = await svc.create(payload.model_dump())
+
+  institution_id = None
   if isinstance(mongo_response, dict):
     institution_id = mongo_response.get("id") or mongo_response.get("_id")
+
   if not institution_id:
     raise HTTPException(status_code=500, detail="Institution created in Mongo but id not found in response")
-  neo.upsert_institution(str(institution_id))
+
+  await _neo(neo.upsert_institution, str(institution_id))
   return mongo_response
 
 @router.get("/{institution_id}", response_model=InstitutionOut)
@@ -36,12 +45,12 @@ async def get_institution(institution_id: str, svc: InstitutionService = Depends
   return await svc.get(institution_id)
 
 @router.get("/{institutionMongoId}/subjects", response_model=list[SubjectOut])
-def get_subjects_by_institution(
+async def get_subjects_by_institution(
     institutionMongoId: str,
     svc: Neo4jGraphService = Depends(svc_dep),
 ):
     try:
-      return svc.get_subjects_by_institution(institutionMongoId)
+      return await _neo(svc.get_subjects_by_institution, institutionMongoId)
     except Exception as e:
       raise HTTPException(status_code=400, detail=str(e))
 
@@ -60,8 +69,10 @@ async def list_institutions(
 async def list_institutions_for_student(
   student_id: str,
   svc: InstitutionService = Depends(get_service),
-  neo: Neo4jGraphService = Depends(get_neo4j_service)):
-  institution_ids = neo.get_student_institutions(student_id)
+  neo: Neo4jGraphService = Depends(get_neo4j_service),
+):
+  institution_ids = await _neo(neo.get_student_institutions, student_id)
+
   results: list[InstitutionOut] = []
   for institution_id in institution_ids:
     inst = await svc.get(institution_id)
@@ -74,9 +85,9 @@ async def list_institutions_for_student(
 async def list_students_for_institution(
   institution_id: str,
   student_svc: StudentService = Depends(get_student_service),
-  neo: Neo4jGraphService = Depends(get_neo4j_service)
+  neo: Neo4jGraphService = Depends(get_neo4j_service),
 ):
-  student_ids: list[str] = neo.get_students_by_institution(institution_id)
+  student_ids: list[str] = await _neo(neo.get_students_by_institution, institution_id)
 
   out: list[StudentOut] = []
   for sid in student_ids:
@@ -88,8 +99,7 @@ async def list_students_for_institution(
 async def create_subject_for_institution(
     institution_id: str,
     name: str = Query(...),
-
     neo: Neo4jGraphService = Depends(get_neo4j_service),
 ):
-    subject = neo.upsert_subject(name, institution_id)
+    subject = await _neo(neo.upsert_subject, name, institution_id)
     return subject

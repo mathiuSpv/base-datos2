@@ -21,7 +21,7 @@ class GradeService:
 
   async def create(self, payload: dict) -> dict:
     subject_id = payload.get("subjectId")
-    if not (isinstance(subject_id) and is_uuid(subject_id)):
+    if not (isinstance(subject_id, str) and is_uuid(subject_id)):
       raise HTTPException(status_code=400, detail=f"Invalid subjectId")
     for k in ("studentId", "institutionId"):
       v = payload.get(k)
