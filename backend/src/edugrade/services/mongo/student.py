@@ -15,20 +15,17 @@ class StudentService:
     await self.repo.ensure_indexes()
 
   async def create(self, payload: dict, audit: AuditContext) -> dict:
-    created = await self.repo.create(payload)
-
-    self.audit_logger.log(
+    return await audited(
+      audit_logger=self.audit_logger,
+      audit=audit,
       operation="CREATE",
       db="mongo",
       entity_type="Student",
-      entity_id=created["_id"],
-      request_id=audit.request_id,
-      user_name=audit.user_name,
-      status="SUCCESS",
-      payload_summary="created student",
+      entity_id="(pending)",
+      payload_summary=f"create student; keys={list(payload.keys())}",
+      fn=lambda: self.repo.create(payload),
+      entity_id_from_result=lambda doc: str(doc.get("_id") or doc.get("id") or "(missing)"),
     )
-
-    return created
 
   async def get(self, student_id: str) -> dict:
     if not ObjectId.is_valid(student_id):
@@ -69,17 +66,19 @@ class StudentService:
     if not ObjectId.is_valid(student_id):
       raise HTTPException(status_code=400, detail="Invalid id")
 
-    ok = await self.repo.delete(ObjectId(student_id))
-    if not ok:
-      raise HTTPException(status_code=404, detail="Student not found")
+    async def _do():
+      ok = await self.repo.delete(ObjectId(student_id))
+      if not ok:
+        raise HTTPException(status_code=404, detail="Student not found")
+      return None
 
-    self.audit_logger.log(
+    await audited(
+      audit_logger=self.audit_logger,
+      audit=audit,
       operation="DELETE",
       db="mongo",
       entity_type="Student",
       entity_id=student_id,
-      request_id=audit.request_id,
-      user_name=audit.user_name,
-      status="SUCCESS",
-      payload_summary="deleted student",
+      payload_summary="delete student",
+      fn=_do,
     )

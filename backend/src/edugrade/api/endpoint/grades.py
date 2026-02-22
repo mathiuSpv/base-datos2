@@ -7,8 +7,8 @@ from edugrade.services.mongo.grade import GradeService
 
 router = APIRouter(prefix="/exams", tags=["exams"])
 
-def get_service(db=Depends(get_mongo_db)) -> GradeService:
-  return GradeService(db)
+def get_service(request: Request, db=Depends(get_mongo_db)) -> GradeService:
+  return GradeService(db, request.app.state.audit_logger)
 
 @router.post("", response_model=GradeOut, status_code=status.HTTP_201_CREATED)
 async def create_exam(
@@ -45,6 +45,9 @@ async def list_exams(
 @router.delete("/{exam_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_exam(
   exam_id: str,
+  audit: AuditContext = Depends(get_audit_context),
   svc: GradeService = Depends(get_service),
   ):
-  await svc.delete(exam_id)
+  await svc.delete(exam_id, audit=audit)
+  return  
+

@@ -7,15 +7,16 @@ from edugrade.core.db import get_mongo_db
 from edugrade.services.neo4j_graph import Neo4jGraphService, get_neo4j_service
 from edugrade.schemas.neo4j.subject import SubjectOut, SubjectUpsertIn
 from edugrade.audit.context import AuditContext, get_audit_context
-
+from edugrade.audit.exec import audited
+from fastapi.concurrency import run_in_threadpool
 
 router = APIRouter(prefix="/institutions", tags=["institutions"])
 
-def get_service(db=Depends(get_mongo_db)) -> InstitutionService:
+def get_service(request: Request, db=Depends(get_mongo_db)) -> InstitutionService:
   return InstitutionService(db, request.app.state.audit_logger)
 
-def get_student_service(db=Depends(get_mongo_db)) -> StudentService:
-  return StudentService(db)
+def get_student_service(request: Request, db=Depends(get_mongo_db)) -> StudentService:
+  return StudentService(db, equest.app.state.audit_logger)
 
 def svc_dep() -> Neo4jGraphService:
   return get_neo4j_service()
@@ -91,7 +92,26 @@ async def list_students_for_institution(
 async def create_subject_for_institution(
     institution_id: str,
     payload: SubjectUpsertIn,
+    audit: AuditContext = Depends(get_audit_context),
     neo: Neo4jGraphService = Depends(get_neo4j_service),
+    request: Request = None,
 ):
-    subject = neo.upsert_subject(payload.name, institution_id)
-    return subject
+    audit_logger = request.app.state.audit_logger
+
+    async def _do():
+        return await run_in_threadpool(neo.upsert_subject, payload.name, institution_id)
+
+    try:
+        subject = await audited(
+            audit_logger=audit_logger,
+            audit=audit,
+            operation="CREATE",
+            db="neo4j",
+            entity_type="Subject",
+            entity_id=f"{institution_id}:{payload.name}",
+            payload_summary=f"subject create; institutionId={institution_id} name={payload.name}",
+            fn=_do,
+        )
+        return subject
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
