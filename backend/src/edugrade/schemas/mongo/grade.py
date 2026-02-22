@@ -1,7 +1,7 @@
 from datetime import datetime, date
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 from edugrade.core.mongo_types import PyObjectId
-from edugrade.utils.object_id import is_objectid_hex
+from edugrade.utils.object_id import is_objectid_hex, is_uuid
 
 class GradeCreate(BaseModel):
   subjectId: str
@@ -17,7 +17,14 @@ class GradeCreate(BaseModel):
   date: date
   value: str = Field(min_length=1, max_length=50)
 
-  @field_validator("subjectId", "studentId", "institutionId")
+  @field_validator("subjectId")
+  @classmethod
+  def validate_subject(cls, v: str):
+      if not is_uuid(v):
+        raise ValueError("subjectId must be a valid UUID")
+      return v
+  
+  @field_validator("studentId", "institutionId")
   @classmethod
   def validate_ids(cls, v: str):
     if not is_objectid_hex(v):
