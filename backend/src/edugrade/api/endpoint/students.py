@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, Query, status, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from edugrade.audit.context import AuditContext, get_audit_context
 from edugrade.core.db import get_mongo_db
 from edugrade.schemas.mongo.student import StudentCreate, StudentOut
 from edugrade.services.mongo.student import StudentService
+from edugrade.services.neo4j_graph import Neo4jGraphService, get_neo4j_service
 
 router = APIRouter(prefix="/students", tags=["students"])
 
@@ -13,12 +14,15 @@ def get_service(request: Request, db=Depends(get_mongo_db)) -> StudentService:
 async def create_student(
   payload: StudentCreate, 
   audit: AuditContext = Depends(get_audit_context),
-  svc: StudentService = Depends(get_service)):
+  svc: StudentService = Depends(get_service),
+  neo: Neo4jGraphService = Depends(get_neo4j_service)):
   mongo_response = await svc.create(payload.model_dump(), audit=audit)
-  if mongo_response is None:
-    return None
-  return 
-
+  if isinstance(mongo_response, dict):
+    student_id = mongo_response.get("id") or mongo_response.get("_id")
+  if not student_id:
+    raise HTTPException(status_code=500, detail="Student created in Mongo but id not found in response")
+  neo.upsert_student(str(student_id))
+  return mongo_response
 
 
 @router.get("/{student_id}", response_model=StudentOut)
@@ -45,4 +49,4 @@ async def delete_student(
   audit: AuditContext = Depends(get_audit_context),
   svc: StudentService = Depends(get_service)):
   await svc.delete(student_id, audit=audit)
-  return None
+  return "0"
