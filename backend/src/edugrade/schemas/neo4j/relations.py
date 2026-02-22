@@ -16,11 +16,25 @@ class StudiesAtIn(BaseModel):
 
 class TookIn(BaseModel):
     studentMongoId: str
-    subjectNeoId: str
-    year: int # Ejemplo: 2023
-    grade: str # Ejemplo: "S6" (Secundaria 6to) | quitar optional | grade se trae del front
+    subjectId: str          # UUID (Subject.id)
+    startDate: str          # ISO "YYYY-MM-DD"
+    endDate: Optional[str] = None  # ISO "YYYY-MM-DD"
+    grade: str              # Ej: "UNI1"
 
-#class EquivalentToIn(BaseModel):  # NO SE USA PORQUE NO ESTAMOS VIENDO EQUIVALENCIAS, SINO TRAYECTORIA ACADÉMICA
+class TookGetIn(BaseModel): # traer datos de relación Studiante y Materia
+    studentMongoId: str
+    subjectId: str
+
+class EquivalentToIn(BaseModel):
+    fromSubjectId: str   # UUID (Subject.id)
+    toSubjectId: str     # UUID (Subject.id)
+    levelStage: str         # ej "19"    
+
+class EquivalentRemoveIn(BaseModel):
+    subjectId: str
+    levelStage: str  # "19"
+
+#class EquivalentTo(BaseModel):  # NO SE USA PORQUE NO ESTAMOS VIENDO EQUIVALENCIAS, SINO TRAYECTORIA ACADÉMICA
 #    fromSubjectId: str
 #    toSubjectId: str
 #    confidence: Optional[float] = 1.0
@@ -29,4 +43,3 @@ class TookIn(BaseModel):
 
 
 # endpoint, lo que se debe hacer es las call de los service, pero sin aplicar lógica
-# 

@@ -6,7 +6,7 @@ class SubjectUpsertIn(BaseModel):
     institutionMongoId: str  # de Mongo
 
 class SubjectOut(BaseModel):
-    id: str  # Neo4j internal id (por ahora)
+    id: str # uuid (Subject.id)
     name: str
     institutionMongoId: str
 

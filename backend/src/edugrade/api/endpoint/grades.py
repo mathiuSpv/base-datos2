@@ -37,3 +37,10 @@ async def list_exams(
   svc: GradeService = Depends(get_service),
 ):
   return await svc.list_projected(subjectId, studentId, institutionId, fromDate, toDate, limit, skip, targetSystem)
+
+@router.delete("/{exam_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_exam(
+  exam_id: str,
+  svc: GradeService = Depends(get_service),
+  ):
+  await svc.delete(exam_id)

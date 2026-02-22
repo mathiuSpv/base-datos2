@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from edugrade.schemas.neo4j_relations import EquivalentToIn
+from backend.src.edugrade.schemas.neo4j.relations import EquivalentToIn
 from edugrade.services.neo4j_graph import get_neo4j_service, Neo4jGraphService
 
 router = APIRouter(prefix="/equivalences", tags=["equivalences"])
@@ -35,9 +35,7 @@ def list_equivalences(
     levelStage: str = Query(..., min_length=1),
     svc: Neo4jGraphService = Depends(get_service),
 ):
-    
     items = svc.get_equivalences_group(subject_id, levelStage)
     if not items:
-        # opcional: si querés diferenciar "no existe subject" vs "no tiene equivalencias"
         return {"subjectId": subject_id, "levelStage": levelStage, "equivalences": []}
     return {"subjectId": subject_id, "levelStage": levelStage, "equivalences": items}

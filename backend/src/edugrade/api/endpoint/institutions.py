@@ -1,17 +1,22 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from backend.src.edugrade.schemas.neo4j.student import StudentOut
+from backend.src.edugrade.services.mongo.student import StudentService
 from edugrade.schemas.mongo.institution import InstitutionCreate, InstitutionOut
 from edugrade.services.mongo.institution import InstitutionService
 from edugrade.core.db import get_mongo_db
 from edugrade.services.neo4j_graph import Neo4jGraphService, get_neo4j_service
-from edugrade.schemas.neo4j_subject import SubjectOut
+from backend.src.edugrade.schemas.neo4j.subject import SubjectOut, SubjectUpsertIn
 
 router = APIRouter(prefix="/institutions", tags=["institutions"])
 
 def get_service(db=Depends(get_mongo_db)) -> InstitutionService:
   return InstitutionService(db)
 
+def get_student_service(db=Depends(get_mongo_db)) -> StudentService:
+  return StudentService(db)
+
 def svc_dep() -> Neo4jGraphService:
-    return get_neo4j_service()
+  return get_neo4j_service()
 
 @router.post("", response_model=InstitutionOut, status_code=status.HTTP_201_CREATED)
 async def create_institution(
@@ -36,9 +41,9 @@ def get_subjects_by_institution(
     svc: Neo4jGraphService = Depends(svc_dep),
 ):
     try:
-        return svc.get_subjects_by_institution(institutionMongoId)
+      return svc.get_subjects_by_institution(institutionMongoId)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+      raise HTTPException(status_code=400, detail=str(e))
 
 @router.get("", response_model=list[InstitutionOut])
 async def list_institutions(
@@ -50,3 +55,40 @@ async def list_institutions(
   svc: InstitutionService = Depends(get_service),
 ):
   return await svc.list(name, country, address, limit, skip)
+
+@router.get("/by-student/{student_id}", response_model=list[InstitutionOut])
+async def list_institutions_for_student(
+  student_id: str,
+  svc: InstitutionService = Depends(get_service),
+  neo: Neo4jGraphService = Depends(get_neo4j_service)):
+  institution_ids = neo.get_student_institutions(student_id)
+  results: list[InstitutionOut] = []
+  for institution_id in institution_ids:
+    inst = await svc.get(institution_id)
+    if inst is not None:
+      results.append(inst)
+
+  return results
+
+@router.get("/{institution_id}/students", response_model=list[StudentOut])
+async def list_students_for_institution(
+  institution_id: str,
+  student_svc: StudentService = Depends(get_student_service),
+  neo: Neo4jGraphService = Depends(get_neo4j_service)
+):
+  student_ids: list[str] = neo.get_students_by_institution(institution_id)
+
+  out: list[StudentOut] = []
+  for sid in student_ids:
+    out.append(await student_svc.get(sid))
+
+  return out
+
+@router.post("/{institution_id}/subjects", response_model=SubjectOut, status_code=status.HTTP_201_CREATED)
+async def create_subject_for_institution(
+    institution_id: str,
+    payload: SubjectUpsertIn,
+    neo: Neo4jGraphService = Depends(get_neo4j_service),
+):
+    subject = neo.upsert_subject(payload.name, institution_id)
+    return subject
