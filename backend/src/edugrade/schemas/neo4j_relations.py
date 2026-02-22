@@ -21,6 +21,10 @@ class TookIn(BaseModel):
     endDate: Optional[str] = None  # ISO "YYYY-MM-DD"
     grade: str              # Ej: "UNI1"
 
+class TookGetIn(BaseModel): # traer datos de relación Studiante y Materia
+    studentMongoId: str
+    subjectId: str
+
 class EquivalentToIn(BaseModel):
     fromSubjectId: str   # UUID (Subject.id)
     toSubjectId: str     # UUID (Subject.id)

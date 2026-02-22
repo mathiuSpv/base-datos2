@@ -322,5 +322,21 @@ class Neo4jGraphRepository:
             result = session.run(query, studentId=studentId)
             return [record.data() for record in result]
 
+    def get_student_subject_took(self, studentMongoId: str, subjectId: str) -> Dict[str, Any]:
+        cypher = f"""
+        MATCH (s:{LABEL_STUDENT} {{mongoId: $studentMongoId}})-[r:{REL_TOOK}]->(sub:{LABEL_SUBJECT} {{id: $subjectId}})
+        RETURN s, sub, r
+        """
+        params = {"studentMongoId": studentMongoId, "subjectId": subjectId}
+        with self.driver.session() as session:
+            rec = session.run(cypher, params).single()
+            if rec is None:
+                return {"found": False}
+            return {
+                "found": True,
+                "student": dict(rec["s"]),
+                "subject": {"id": str(rec["sub"]["id"]), **dict(rec["sub"])},
+                "took": dict(rec["r"]),  # startDate, endDate, grade
+            }
         
 
