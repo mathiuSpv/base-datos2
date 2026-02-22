@@ -3,13 +3,14 @@ from fastapi import HTTPException
 
 from edugrade.repository.mongo.conversion_rule import ConversionRuleRepository
 from edugrade.repository.mongo.options import OptionsRepository
-
+from edugrade.audit.context import AuditContext
 from edugrade.utils.string import normalize_value_key
 
 class ConversionRulesService:
-  def __init__(self, db):
+  def __init__(self, db, audit_logger):
     self.rules = ConversionRuleRepository(db)
     self.options = OptionsRepository(db)
+    self.audit_logger = audit_logger
 
   @staticmethod
   def _invert_map(m: dict[str, str]) -> dict[str, str]:

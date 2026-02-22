@@ -1,16 +1,20 @@
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, status, Request
 from edugrade.schemas.mongo.institution import InstitutionCreate, InstitutionOut
 from edugrade.services.mongo.institution import InstitutionService
+from edugrade.audit.context import AuditContext, get_audit_context
 from edugrade.core.db import get_mongo_db
 
 router = APIRouter(prefix="/institutions", tags=["institutions"])
 
 def get_service(db=Depends(get_mongo_db)) -> InstitutionService:
-  return InstitutionService(db)
+  return InstitutionService(db, request.app.state.audit_logger)
 
 @router.post("", response_model=InstitutionOut, status_code=status.HTTP_201_CREATED)
-async def create_institution(payload: InstitutionCreate, svc: InstitutionService = Depends(get_service)):
-  return await svc.create(payload.model_dump())
+async def create_institution(
+    payload: InstitutionCreate, 
+    audit: AuditContext = Depends(get_audit_context),
+    svc: InstitutionService = Depends(get_service)):
+  return await svc.create(payload.model_dump(), audit=audit)
 
 @router.get("/{institution_id}", response_model=InstitutionOut)
 async def get_institution(institution_id: str, svc: InstitutionService = Depends(get_service)):

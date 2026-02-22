@@ -7,7 +7,7 @@ from fastapi import HTTPException
 
 from edugrade.repository.mongo.grade import GradeRepository
 from edugrade.services.mongo.conversion_rules import ConversionRulesService
-
+from edugrade.audit.context import AuditContext
 from edugrade.utils.object_id import is_objectid_hex
 from edugrade.utils.string import non_empty_str
 from edugrade.utils.date import date_to_datetime_utc, ensure_date, ensure_date_range
@@ -15,11 +15,12 @@ from edugrade.utils.date import date_to_datetime_utc, ensure_date, ensure_date_r
 
 class GradeService:
 
-  def __init__(self, db):
+  def __init__(self, db, audit_logger):
     self.repo = GradeRepository(db)
     self.conv = ConversionRulesService(db)
+    self.audit_logger = audit_logger
 
-  async def create(self, payload: dict) -> dict:
+  async def create(self, payload: dict, audit: AuditContext) -> dict:
     for k in ("subjectId", "studentId", "institutionId"):
       v = payload.get(k)
       if not (isinstance(v, str) and is_objectid_hex(v)):
@@ -48,7 +49,19 @@ class GradeService:
     doc["valueConverted"] = value_converted_za
     doc["createdAt"] = datetime.now(timezone.utc)
 
-    return await self.repo.create(doc)
+    created = await self.repo.create(doc)
+
+    self.audit_logger.log(
+      operation="CREATE",
+      db="mongo",
+      entity_type="Grade",
+      entity_id=created["_id"],
+      request_id=audit.request_id,
+      user_name=audit.user_name,
+      status="SUCCESS",
+      payload_summary=f"grade created; system={system} country={country} grade={grade}",
+    )
+    return created
 
   async def get(self, grade_id: str) -> dict:
     if not ObjectId.is_valid(grade_id):
