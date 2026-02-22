@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from bson import ObjectId
+from edugrade.utils.object_id import is_objectid_hex
 import re
 
 class InstitutionRepository:
@@ -15,10 +16,14 @@ class InstitutionRepository:
     doc["createdAt"] = datetime.now(timezone.utc)
 
     res = await self.col.insert_one(doc)
-    return await self.col.find_one({"_id": res.inserted_id})
 
-  async def get_by_id(self, institution_id: ObjectId) -> dict | None:
-    return await self.col.find_one({"_id": institution_id})
+    # Guardar mongoId como string del _id (sirve para Neo4j)
+    await self.col.update_one(
+      {"_id": res.inserted_id},
+      {"$set": {"mongoId": str(res.inserted_id)}}
+    )
+
+    return await self.col.find_one({"_id": res.inserted_id})
 
   async def list(
     self,
@@ -42,3 +47,13 @@ class InstitutionRepository:
 
     cursor = self.col.find(q).sort("createdAt", -1).skip(skip).limit(limit)
     return [doc async for doc in cursor]
+  
+  async def get_one(self, identifier: str) -> dict | None:
+    # 1) si parece ObjectId real
+    if is_objectid_hex(identifier):
+      doc = await self.col.find_one({"_id": ObjectId(identifier)})
+      if doc:
+        return doc
+
+    # 2) si no, lo tratamos como mongoId (string)
+    return await self.col.find_one({"mongoId": identifier})

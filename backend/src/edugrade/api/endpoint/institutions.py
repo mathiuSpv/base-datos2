@@ -91,7 +91,8 @@ async def list_students_for_institution(
 @router.post("/{institution_id}/subjects", response_model=SubjectOut, status_code=status.HTTP_201_CREATED)
 async def create_subject_for_institution(
     institution_id: str,
-    payload: SubjectUpsertIn,
+    name: str = Query(...),
+
     audit: AuditContext = Depends(get_audit_context),
     neo: Neo4jGraphService = Depends(get_neo4j_service),
     request: Request = None,

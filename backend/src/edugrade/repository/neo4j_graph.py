@@ -359,37 +359,66 @@ class Neo4jGraphRepository:
             return [record["studentMongoId"] for record in result]
         
     def get_student_history_rows(self, studentMongoId: str) -> List[Dict[str, Any]]:
-      cypher = f"""
-      MATCH (s:{LABEL_STUDENT} {{mongoId: $studentMongoId}})
+        cypher = f"""
+        MATCH (s:{LABEL_STUDENT} {{mongoId: $studentMongoId}})
 
-      MATCH (s)-[e:{REL_STUDIES_AT}]->(i:{LABEL_INSTITUTION})
-      MATCH (s)-[r:{REL_TOOK}]->(sub:{LABEL_SUBJECT})
+        MATCH (s)-[e:{REL_STUDIES_AT}]->(i:{LABEL_INSTITUTION})
 
-      WITH
-        i, sub,
-        date(e.startDate) AS instFrom,
-        coalesce(date(e.endDate), date("9999-12-31")) AS instTo,
-        date(r.startDate) AS subFrom,
-        coalesce(date(r.endDate), date("9999-12-31")) AS subTo,
-        e.startDate AS institutionStartDate,
-        e.endDate   AS institutionEndDate,
-        r.startDate AS subjectStartDate,
-        r.endDate   AS subjectEndDate
+        OPTIONAL MATCH (s)-[r:{REL_TOOK}]->(sub:{LABEL_SUBJECT})
 
-      WHERE instFrom <= subTo AND subFrom <= instTo
+        WITH
+            i, e, r, sub,
+            date(e.startDate) AS instFrom,
+            coalesce(date(e.endDate), date("9999-12-31")) AS instTo,
+            CASE WHEN r IS NULL THEN null ELSE date(r.startDate) END AS subFrom,
+            CASE WHEN r IS NULL THEN null ELSE coalesce(date(r.endDate), date("9999-12-31")) END AS subTo,
+            e.startDate AS institutionStartDate,
+            e.endDate   AS institutionEndDate,
+            r.startDate AS subjectStartDate,
+            r.endDate   AS subjectEndDate
 
-      RETURN
+        WHERE r IS NULL OR (instFrom <= subTo AND subFrom <= instTo)
+
+        RETURN
+            id(e) AS enrollmentId,
+            i.mongoId AS institutionMongoId,
+            institutionStartDate,
+            institutionEndDate,
+            sub.id AS subjectId,
+            sub.name AS subjectName,
+            subjectStartDate,
+            subjectEndDate
+        ORDER BY institutionMongoId, enrollmentId, subjectStartDate ASC
+        """
+
+        with self.driver.session() as session:
+            res = session.run(cypher, {"studentMongoId": studentMongoId})
+            return [record.data() for record in res]
+        
+    def get_student_enrollments(self, studentMongoId: str) -> list[dict]:
+        cypher = f"""
+        MATCH (s:{LABEL_STUDENT} {{mongoId: $studentMongoId}})-[e:{REL_STUDIES_AT}]->(i:{LABEL_INSTITUTION})
+        RETURN
+        id(e) AS enrollmentId,
         i.mongoId AS institutionMongoId,
-        institutionStartDate,
-        institutionEndDate,
+        e.startDate AS institutionStartDate,
+        e.endDate AS institutionEndDate
+        ORDER BY institutionStartDate ASC
+        """
+        with self.driver.session() as session:
+            res = session.run(cypher, {"studentMongoId": studentMongoId})
+            return [record.data() for record in res]
+        
+    def get_student_subject_rows(self, studentMongoId: str) -> list[dict]:
+        cypher = f"""
+        MATCH (s:{LABEL_STUDENT} {{mongoId: $studentMongoId}})-[r:{REL_TOOK}]->(sub:{LABEL_SUBJECT})
+        RETURN
         sub.id AS subjectId,
         sub.name AS subjectName,
-        subjectStartDate,
-        subjectEndDate
-
-      ORDER BY institutionMongoId, subjectStartDate ASC
-      """
-
-      with self.driver.session() as session:
-        res = session.run(cypher, {"studentMongoId": studentMongoId})
-        return [record.data() for record in res]
+        r.startDate AS subjectStartDate,
+        r.endDate AS subjectEndDate
+        ORDER BY subjectStartDate ASC
+        """
+        with self.driver.session() as session:
+            res = session.run(cypher, {"studentMongoId": studentMongoId})
+            return [record.data() for record in res]
