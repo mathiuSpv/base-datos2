@@ -39,7 +39,8 @@ class ConversionRuleRepository:
       {
       "system": system,
       "country": country,
-      "grade": grade,
+      "grade.min": {"$lte": grade},
+      "grade.max": {"$gte": grade},
       "validFrom": {"$lte": when},
       "$or": [{"validTo": None}, {"validTo": {"$gte": when}}],
       },

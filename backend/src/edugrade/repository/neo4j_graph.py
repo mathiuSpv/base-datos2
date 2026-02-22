@@ -205,7 +205,6 @@ class Neo4jGraphRepository:
         with self.driver.session() as session:
             rec = session.run(cypher, params).single()
             if rec is None:
-                # o b estaba en grupo (bloqueado) o no encontró nodos
                 raise ValueError("Cannot add equivalence: subject not found or target is already in another group")
             return {"ok": True, "aState": rec["aState"], "bWasInGroup": rec["bWasInGroup"]}
 
@@ -312,10 +311,7 @@ class Neo4jGraphRepository:
     def get_institutions_by_student(self, studentId: str):
         query = """
         MATCH (s:Student {mongoId: $studentId})-[:STUDIES_AT]->(i:Institution)
-        RETURN i.mongoId AS mongoId,
-            i.name AS name,
-            i.country AS country,
-            i.level AS level
+        RETURN i.mongoId AS institutionId
         """
 
         with self.driver.session() as session:
@@ -380,7 +376,7 @@ class Neo4jGraphRepository:
         WHERE r IS NULL OR (instFrom <= subTo AND subFrom <= instTo)
 
         RETURN
-            id(e) AS enrollmentId,
+            elementId(e) AS enrollmentId,
             i.mongoId AS institutionMongoId,
             institutionStartDate,
             institutionEndDate,
@@ -399,7 +395,7 @@ class Neo4jGraphRepository:
         cypher = f"""
         MATCH (s:{LABEL_STUDENT} {{mongoId: $studentMongoId}})-[e:{REL_STUDIES_AT}]->(i:{LABEL_INSTITUTION})
         RETURN
-        id(e) AS enrollmentId,
+        elementId(e) AS enrollmentId,
         i.mongoId AS institutionMongoId,
         e.startDate AS institutionStartDate,
         e.endDate AS institutionEndDate

@@ -5,19 +5,21 @@ from edugrade.schemas.mongo.institution import InstitutionCreate, InstitutionOut
 from edugrade.services.mongo.institution import InstitutionService
 from edugrade.core.db import get_mongo_db
 from edugrade.services.neo4j_graph import Neo4jGraphService, get_neo4j_service
-from edugrade.schemas.neo4j.subject import SubjectOut, SubjectUpsertIn
-
+from edugrade.schemas.neo4j.subject import SubjectOut
 from edugrade.audit.context import AuditContext, get_audit_context
 from edugrade.audit.exec import audited
 import asyncio
+
+router = APIRouter(prefix="/institutions", tags=["institutions"])
+
 async def _neo(callable_, *args, **kwargs):
     return await asyncio.to_thread(callable_, *args, **kwargs)
 
-def get_service(db=Depends(get_mongo_db)) -> InstitutionService:
-  return InstitutionService(db)
+def get_service(request: Request,db=Depends(get_mongo_db)) -> InstitutionService:
+  return InstitutionService(db, request.app.state.audit_logger)
 
 def get_student_service(request: Request, db=Depends(get_mongo_db)) -> StudentService:
-  return StudentService(db, equest.app.state.audit_logger)
+  return StudentService(db, request.app.state.audit_logger)
 
 def svc_dep() -> Neo4jGraphService:
   return get_neo4j_service()
@@ -75,7 +77,7 @@ async def list_institutions_for_student(
 
   results: list[InstitutionOut] = []
   for institution_id in institution_ids:
-    inst = await svc.get(institution_id)
+    inst = await svc.get(institution_id.get('institutionId'))
     if inst is not None:
       results.append(inst)
 
@@ -115,8 +117,8 @@ async def create_subject_for_institution(
             operation="CREATE",
             db="neo4j",
             entity_type="Subject",
-            entity_id=f"{institution_id}:{payload.name}",
-            payload_summary=f"subject create; institutionId={institution_id} name={payload.name}",
+            entity_id=f"{institution_id}:{name}",
+            payload_summary=f"subject create; institutionId={institution_id} name={name}",
             fn=_do,
         )
         return subject

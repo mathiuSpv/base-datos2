@@ -32,7 +32,7 @@ class GradeService:
         v = payload.get(k)
         if not (isinstance(v, str) and is_objectid_hex(v)):
           raise HTTPException(status_code=400, detail=f"Invalid {k}")
-
+        
       # Validaciones de strings / date
       try:
         system = non_empty_str(payload.get("system"), "system")

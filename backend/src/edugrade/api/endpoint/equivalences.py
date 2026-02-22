@@ -25,12 +25,10 @@ async def create_equivalence(
     request: Request = None,
 ):
     audit_logger = request.app.state.audit_logger
-
-    
-
     try:
-        res = await _neo(svc.add_equivalence, payload.fromSubjectId, payload.toSubjectId, payload.levelStage)
-        await audited(
+        async def _do():
+            return await _neo(svc.add_equivalence, payload.fromSubjectId, payload.toSubjectId, payload.levelStage)
+        res = await audited(
             audit_logger=audit_logger,
             audit=audit,
             operation="CREATE",
@@ -58,10 +56,12 @@ async def delete_equivalence(
     request: Request = None,
 ):
     audit_logger = request.app.state.audit_logger
-    result = await _neo(svc.unlink_equivalence_by_subject, subject_id, levelStage)
-    if not result["deleted"]:
-        raise HTTPException(status_code=404, detail="Subject has no equivalence group for that levelStage")
-    await audited(
+    async def _do():
+        result = await _neo(svc.unlink_equivalence_by_subject, subject_id, levelStage)
+        if not result["deleted"]:
+            raise HTTPException(status_code=404, detail="Subject has no equivalence group for that levelStage")
+        return 0
+    res = await audited(
         audit_logger=audit_logger,
         audit=audit,
         operation="DELETE",
@@ -71,7 +71,7 @@ async def delete_equivalence(
         payload_summary=f"equivalence delete; subject={subject_id} levelStage={levelStage}",
         fn=_do,
     )
-    return {"ok": True, **result}
+    return {"ok": True, **res}
 
 @router.get("/{subject_id}")
 async def list_equivalences(
