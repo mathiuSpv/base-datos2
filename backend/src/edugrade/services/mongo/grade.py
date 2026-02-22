@@ -12,7 +12,7 @@ from edugrade.audit.exec import audited
 from edugrade.repository.mongo.grade import GradeRepository
 from edugrade.services.mongo.conversion_rules import ConversionRulesService
 from edugrade.utils.date import date_to_datetime_utc, ensure_date, ensure_date_range
-from edugrade.utils.object_id import is_objectid_hex
+from edugrade.utils.object_id import is_objectid_hex, is_uuid
 from edugrade.utils.string import non_empty_str
 
 
@@ -25,7 +25,10 @@ class GradeService:
   async def create(self, payload: dict, audit: AuditContext) -> dict:
     async def _do() -> dict:
       # Validaciones de IDs
-      for k in ("subjectId", "studentId", "institutionId"):
+      subject_id = payload.get("subjectId")
+    if not (isinstance(subject_id) and is_uuid(subject_id)):
+      raise HTTPException(status_code=400, detail=f"Invalid subjectId")
+    for k in ("studentId", "institutionId"):
         v = payload.get(k)
         if not (isinstance(v, str) and is_objectid_hex(v)):
           raise HTTPException(status_code=400, detail=f"Invalid {k}")
@@ -111,7 +114,7 @@ class GradeService:
     limit: int,
     skip: int,
   ) -> list[dict]:
-    if not (is_objectid_hex(subject_id) and is_objectid_hex(student_id) and is_objectid_hex(institution_id)):
+    if not (is_uuid(subject_id) and is_objectid_hex(student_id) and is_objectid_hex(institution_id)):
       raise HTTPException(status_code=400, detail="Invalid subjectId/studentId/institutionId")
 
     try:
