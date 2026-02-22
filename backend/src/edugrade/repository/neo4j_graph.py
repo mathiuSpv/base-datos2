@@ -293,5 +293,18 @@ class Neo4jGraphRepository:
             return [dict(r) for r in res]
 
 
+    def get_institutions_by_student(self, studentId: str):
+        query = """
+        MATCH (s:Student {mongoId: $studentId})-[:STUDIES_AT]->(i:Institution)
+        RETURN i.mongoId AS mongoId,
+            i.name AS name,
+            i.country AS country,
+            i.level AS level
+        """
+
+        with self.driver.session() as session:
+            result = session.run(query, studentId=studentId)
+            return [record.data() for record in result]
+
         
 
