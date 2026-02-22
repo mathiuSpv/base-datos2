@@ -24,11 +24,12 @@ class GradeService:
 
   async def create(self, payload: dict, audit: AuditContext) -> dict:
     async def _do() -> dict:
-      # Validaciones de IDs
+      # Validaciones de IDs (subjectId = UUID, studentId/institutionId = ObjectId hex)
       subject_id = payload.get("subjectId")
-    if not (isinstance(subject_id) and is_uuid(subject_id)):
-      raise HTTPException(status_code=400, detail=f"Invalid subjectId")
-    for k in ("studentId", "institutionId"):
+      if not (isinstance(subject_id, str) and is_uuid(subject_id)):
+        raise HTTPException(status_code=400, detail="Invalid subjectId")
+
+      for k in ("studentId", "institutionId"):
         v = payload.get(k)
         if not (isinstance(v, str) and is_objectid_hex(v)):
           raise HTTPException(status_code=400, detail=f"Invalid {k}")
@@ -43,7 +44,7 @@ class GradeService:
       except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-      # Conversión a ZA (puede lanzar 404/422/etc => audited lo registra como ERROR)
+      # Conversión a ZA
       value_converted_za = await self.conv.convert_to_za(
         value=value,
         system=system,
@@ -51,7 +52,7 @@ class GradeService:
         grade=grade,
         when=when,
       )
-      
+
       doc = dict(payload)
       doc["date"] = when
       doc["valueConverted"] = value_converted_za
