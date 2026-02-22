@@ -32,5 +32,27 @@ def main():
     # 5) read
     print("Student subjects:", neo.get_student_subjects(student_id))
 
+    # 6) equivalent (nivel 19)
+    level = "19"
+
+    print("Link eq sub1->sub2:",
+        neo.link_equivalent_to(sub1["id"], sub2["id"], level))
+
+    print("Link eq sub2->sub3:",
+        neo.link_equivalent_to(sub2["id"], sub3["id"], level))
+
+    print("Link eq sub3->sub1:",
+        neo.link_equivalent_to(sub3["id"], sub1["id"], level))
+
+    print("Cycle eq sub1 & sub2?:",
+        neo.are_equivalent_by_cycle(sub1["id"], sub2["id"], level))
+
+    print("Cycle eq sub1 & sub3?:",
+        neo.are_equivalent_by_cycle(sub1["id"], sub3["id"], level))
+    
+    # 7) equivalent falso nivel 20
+    print("Cycle nivel 20 (debería ser False):",
+        neo.are_equivalent_by_cycle(sub1["id"], sub2["id"], "20"))
+
 if __name__ == "__main__":
     main()

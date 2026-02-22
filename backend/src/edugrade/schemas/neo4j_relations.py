@@ -20,7 +20,12 @@ class TookIn(BaseModel):
     year: int # Ejemplo: 2023
     grade: str # Ejemplo: "S6" (Secundaria 6to) | quitar optional | grade se trae del front
 
-#class EquivalentToIn(BaseModel):  # NO SE USA PORQUE NO ESTAMOS VIENDO EQUIVALENCIAS, SINO TRAYECTORIA ACADÉMICA
+class EquivalentToIn(BaseModel):
+    fromSubjectId: str   # UUID (Subject.id)
+    toSubjectId: str     # UUID (Subject.id)
+    levelStage: str         # ej "19"    
+
+#class EquivalentTo(BaseModel):  # NO SE USA PORQUE NO ESTAMOS VIENDO EQUIVALENCIAS, SINO TRAYECTORIA ACADÉMICA
 #    fromSubjectId: str
 #    toSubjectId: str
 #    confidence: Optional[float] = 1.0
@@ -29,4 +34,3 @@ class TookIn(BaseModel):
 
 
 # endpoint, lo que se debe hacer es las call de los service, pero sin aplicar lógica
-# 

@@ -41,19 +41,17 @@ class Neo4jGraphService:
     ):
         return self.repo.link_took(studentMongoId, subjectId, year, grade)
 
-    # def link_equivalent_to(
-    #     self,
-    #     fromSubjectId: str,
-    #     toSubjectId: str,
-    #     confidence: float = 1.0,
-    #     source: str | None = None,
-    # ):
-    #     return self.repo.link_equivalent_to(fromSubjectId, toSubjectId, confidence, source)
+    def link_equivalent_to(self, fromSubjectId: str, toSubjectId: str, levelStage: str):
+        return self.repo.link_equivalent_to(fromSubjectId, toSubjectId, levelStage)
 
     # ---------- READ QUERIES ----------
 
     def get_student_subjects(self, studentMongoId: str):
         return self.repo.get_student_subjects(studentMongoId)
+
+    def are_equivalent_by_cycle(self, aId: str, bId: str, levelStage: str):
+        return self.repo.are_equivalent_by_cycle(aId, bId, levelStage)
+
 
     # def get_equivalents(self, subjectId: str, limit: int = 10):
     #     return self.repo.get_equivalents(subjectId, limit)

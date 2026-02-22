@@ -9,7 +9,7 @@ from edugrade.models.neo4j import (
     LABEL_SUBJECT,
     REL_STUDIES_AT,
     REL_TOOK,
-#    REL_EQUIVALENT_TO, por ahora no porque no usamos equivalent -> schemas/neo4j_relations.py
+    REL_EQUIVALENT_TO,
 )
 
 
@@ -29,7 +29,11 @@ class Neo4jGraphRepository:
             """)
             session.run("""
                 CREATE CONSTRAINT subject_id IF NOT EXISTS
-                FOR (sub:Subject) REQUIRE sub.id IS UNIQUE;
+                FOR (sub:Subject) REQUIRE sub.id IS UNIQUE
+            """)
+            session.run("""
+                CREATE CONSTRAINT subject_unique IF NOT EXISTS
+                FOR (sub:Subject) REQUIRE (sub.name, sub.institutionMongoId) IS UNIQUE
             """)
             
     # ---------- UPSERT NODES ----------
@@ -126,27 +130,23 @@ class Neo4jGraphRepository:
                 raise ValueError(f"Not found: studentMongoId={studentMongoId} or subjectId={subjectId}")
             return dict(rec["r"])
 
-    # def link_equivalent_to(
-    #     self,
-    #     fromSubjectId: str,
-    #     toSubjectId: str,
-    #     confidence: float = 1.0,
-    #     source: Optional[str] = None,
-    # ) -> Dict[str, Any]:
-    #     cypher = f"""
-    #     MATCH (a:{LABEL_SUBJECT} {{mongoId: $fromSubjectId}})
-    #     MATCH (b:{LABEL_SUBJECT} {{mongoId: $toSubjectId}})
-    #     MERGE (a)-[r:{REL_EQUIVALENT_TO}]->(b)
-    #     SET r.confidence = $confidence,
-    #         r.source     = $source
-    #     RETURN r
-    #     """
-    #     params = {"fromSubjectId": fromSubjectId, "toSubjectId": toSubjectId, "confidence": confidence, "source": source}
-    #     with self.driver.session() as session:
-    #         rec = session.run(cypher, params).single()
-    #         if rec is None:
-    #             raise ValueError(f"Not found: Subject(s) -> fromSubjectId={fromSubjectId} or toSubjectId={toSubjectId} not found")
-    #         return dict(rec["r"])
+    def link_equivalent_to(self, fromSubjectId: str, toSubjectId: str, levelStage: str) -> Dict[str, Any]:
+        if fromSubjectId == toSubjectId:
+            raise ValueError("fromSubjectId and toSubjectId must be different")
+
+        cypher = f"""
+        MATCH (a:{LABEL_SUBJECT} {{id: $fromSubjectId}})
+        MATCH (b:{LABEL_SUBJECT} {{id: $toSubjectId}})
+        MERGE (a)-[r:{REL_EQUIVALENT_TO} {{levelStage: $levelStage}}]->(b)
+        ON CREATE SET r.createdAt = datetime()
+        RETURN r
+        """
+        params = {"fromSubjectId": fromSubjectId, "toSubjectId": toSubjectId, "levelStage": levelStage}
+        with self.driver.session() as session:
+            rec = session.run(cypher, params).single()
+            if rec is None:
+                raise ValueError(f"Not found: fromSubjectId={fromSubjectId} or toSubjectId={toSubjectId}")
+            return dict(rec["r"])
 
     # ---------- QUERIES (READ) ----------
 
@@ -166,31 +166,24 @@ class Neo4jGraphRepository:
                 })
             return out
 
-    # def get_equivalents(self, subjectId: str, limit: int = 10) -> List[Dict[str, Any]]:
-    #     cypher = f"""
-    #     MATCH (sub:{LABEL_SUBJECT} {{mongoId: $subjectId}})-[r:{REL_EQUIVALENT_TO}]->(eq:{LABEL_SUBJECT})
-    #     RETURN eq, r
-    #     ORDER BY coalesce(r.confidence, 0) DESC
-    #     LIMIT $limit
-    #     """
-    #     with self.driver.session() as session:
-    #         results = session.run(cypher, {"subjectId": subjectId, "limit": limit})
-    #         out: List[Dict[str, Any]] = []
-    #         for rec in results:
-    #             out.append({"equivalent": dict(rec["eq"]), "relation": dict(rec["r"])})
-    #         return out
+    def are_equivalent_by_cycle(self, aId: str, bId: str, levelStage: str) -> bool:
+        cypher = f"""
+        MATCH (a:{LABEL_SUBJECT} {{id: $aId}})
+        MATCH (b:{LABEL_SUBJECT} {{id: $bId}})
 
-    # def recommend_subjects_for_student(self, studentId: str, limit: int = 10) -> List[Dict[str, Any]]:
-    #     cypher = f"""
-    #     MATCH (me:{LABEL_STUDENT} {{mongoId: $studentId}})-[:{REL_STUDIES_AT}]->(inst:{LABEL_INSTITUTION})<-[:{REL_STUDIES_AT}]-(other:{LABEL_STUDENT})-[:{REL_TOOK}]->(sub:{LABEL_SUBJECT})
-    #     WHERE NOT (me)-[:{REL_TOOK}]->(sub)
-    #     RETURN sub, count(*) AS score
-    #     ORDER BY score DESC
-    #     LIMIT $limit
-    #     """
-    #     with self.driver.session() as session:
-    #         results = session.run(cypher, {"studentId": studentId, "limit": limit})
-    #         out: List[Dict[str, Any]] = []
-    #         for rec in results:
-    #             out.append({"subject": dict(rec["sub"]), "score": rec["score"]})
-    #         return out
+        OPTIONAL MATCH p1 = (a)-[:{REL_EQUIVALENT_TO}*1..]->(b)
+        OPTIONAL MATCH p2 = (b)-[:{REL_EQUIVALENT_TO}*1..]->(a)
+
+        WITH p1, p2
+        WHERE p1 IS NOT NULL
+        AND p2 IS NOT NULL
+        AND ALL(r IN relationships(p1) WHERE toString(r.levelStage) = $levelStage)
+        AND ALL(r IN relationships(p2) WHERE toString(r.levelStage) = $levelStage)
+
+        RETURN true AS equivalent
+        """
+        params = {"aId": aId, "bId": bId, "levelStage": levelStage}
+        with self.driver.session() as session:
+            rec = session.run(cypher, params).single()
+            return bool(rec) and bool(rec["equivalent"])
+
