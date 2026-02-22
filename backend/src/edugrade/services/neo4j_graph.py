@@ -41,20 +41,22 @@ class Neo4jGraphService:
     ):
         return self.repo.link_took(studentMongoId, subjectId, year, grade)
 
-    def link_equivalent_to(self, fromSubjectId: str, toSubjectId: str, levelStage: str):
-        return self.repo.link_equivalent_to(fromSubjectId, toSubjectId, levelStage)
+    def add_equivalence(self, fromSubjectId: str, toSubjectId: str, levelStage: str):
+        return self.repo.add_equivalence(fromSubjectId, toSubjectId, levelStage)
+    
+    def unlink_equivalence_by_subject(self, subjectId: str, levelStage: str):
+        return self.repo.unlink_equivalence_by_subject(subjectId, levelStage)    
+    
+    def are_equivalent_by_cycle(self, aId: str, bId: str, levelStage: str):
+        return self.repo.are_equivalent_by_cycle(aId, bId, levelStage)
 
     # ---------- READ QUERIES ----------
 
     def get_student_subjects(self, studentMongoId: str):
         return self.repo.get_student_subjects(studentMongoId)
-
-    def are_equivalent_by_cycle(self, aId: str, bId: str, levelStage: str):
-        return self.repo.are_equivalent_by_cycle(aId, bId, levelStage)
-
-
-    # def get_equivalents(self, subjectId: str, limit: int = 10):
-    #     return self.repo.get_equivalents(subjectId, limit)
+    
+    def get_equivalences_group(self, subjectId: str, levelStage: str):
+        return self.repo.get_equivalences_group(subjectId, levelStage)
 
     # def recommend_subjects_for_student(self, studentId: str, limit: int = 10):
     #     return self.repo.recommend_subjects_for_student(studentId, limit)

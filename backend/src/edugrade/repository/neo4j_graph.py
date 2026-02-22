@@ -130,42 +130,111 @@ class Neo4jGraphRepository:
                 raise ValueError(f"Not found: studentMongoId={studentMongoId} or subjectId={subjectId}")
             return dict(rec["r"])
 
-    def link_equivalent_to(self, fromSubjectId: str, toSubjectId: str, levelStage: str) -> Dict[str, Any]:
-        if fromSubjectId == toSubjectId:
+    def add_equivalence(self, fromId: str, toId: str, levelStage: str) -> Dict[str, Any]:
+        if fromId == toId:
             raise ValueError("fromSubjectId and toSubjectId must be different")
 
         cypher = f"""
-        MATCH (a:{LABEL_SUBJECT} {{id: $fromSubjectId}})
-        MATCH (b:{LABEL_SUBJECT} {{id: $toSubjectId}})
-        MERGE (a)-[r:{REL_EQUIVALENT_TO} {{levelStage: $levelStage}}]->(b)
-        ON CREATE SET r.createdAt = datetime()
-        RETURN r
+        MATCH (a:{LABEL_SUBJECT} {{id:$fromId}})
+        MATCH (b:{LABEL_SUBJECT} {{id:$toId}})
+
+        // si ya hay arista directa, listo
+        OPTIONAL MATCH (a)-[existing:{REL_EQUIVALENT_TO} {{levelStage:$levelStage}}]->(b)
+
+        // detectar si a está en un grupo (tiene succ y pred)
+        OPTIONAL MATCH (a)-[a_out:{REL_EQUIVALENT_TO} {{levelStage:$levelStage}}]->(a_succ:{LABEL_SUBJECT})
+        OPTIONAL MATCH (a_pred:{LABEL_SUBJECT})-[a_in:{REL_EQUIVALENT_TO} {{levelStage:$levelStage}}]->(a)
+
+        // detectar si b ya está en algún grupo
+        OPTIONAL MATCH (b)-[:{REL_EQUIVALENT_TO} {{levelStage:$levelStage}}]->(:{LABEL_SUBJECT})
+        OPTIONAL MATCH (:{LABEL_SUBJECT})-[:{REL_EQUIVALENT_TO} {{levelStage:$levelStage}}]->(b)
+
+        WITH a,b,existing,a_succ,a_out,a_pred,a_in,
+            CASE
+            WHEN existing IS NOT NULL THEN 'ALREADY_DIRECT'
+            WHEN a_succ IS NULL AND a_pred IS NULL THEN 'A_ISOLATED'
+            ELSE 'A_IN_GROUP'
+            END AS a_state,
+            CASE
+            WHEN ( (b)-[:{REL_EQUIVALENT_TO} {{levelStage:$levelStage}}]->() ) OR ( ()-[:{REL_EQUIVALENT_TO} {{levelStage:$levelStage}}]->(b) )
+            THEN true ELSE false
+            END AS b_in_group
+
+        // si b ya está en un grupo, por ahora no mezclamos grupos
+        WITH a,b,existing,a_succ,a_out,a_state,b_in_group
+        WHERE NOT b_in_group
+
+        // CASO 1: A y B aislados => par bidireccional
+        FOREACH (_ IN CASE WHEN a_state='A_ISOLATED' THEN [1] ELSE [] END |
+        MERGE (a)-[r1:{REL_EQUIVALENT_TO} {{levelStage:$levelStage}}]->(b)
+        ON CREATE SET r1.createdAt = datetime()
+        MERGE (b)-[r2:{REL_EQUIVALENT_TO} {{levelStage:$levelStage}}]->(a)
+        ON CREATE SET r2.createdAt = datetime()
+        )
+
+        // CASO 2: A está en grupo (ciclo) y B aislado => insertar B "después" de A
+        // a -> a_succ pasa a ser: a -> b -> a_succ
+        FOREACH (_ IN CASE WHEN a_state='A_IN_GROUP' THEN [1] ELSE [] END |
+        DELETE a_out
+        MERGE (a)-[r3:{REL_EQUIVALENT_TO} {{levelStage:$levelStage}}]->(b)
+        ON CREATE SET r3.createdAt = datetime()
+        MERGE (b)-[r4:{REL_EQUIVALENT_TO} {{levelStage:$levelStage}}]->(a_succ)
+        ON CREATE SET r4.createdAt = datetime()
+        )
+
+        RETURN true AS ok, a_state AS aState, b_in_group AS bWasInGroup;
         """
-        params = {"fromSubjectId": fromSubjectId, "toSubjectId": toSubjectId, "levelStage": levelStage}
+
+        params = {"fromId": fromId, "toId": toId, "levelStage": str(levelStage)}
         with self.driver.session() as session:
             rec = session.run(cypher, params).single()
             if rec is None:
-                raise ValueError(f"Not found: fromSubjectId={fromSubjectId} or toSubjectId={toSubjectId}")
-            return dict(rec["r"])
+                # o b estaba en grupo (bloqueado) o no encontró nodos
+                raise ValueError("Cannot add equivalence: subject not found or target is already in another group")
+            return {"ok": True, "aState": rec["aState"], "bWasInGroup": rec["bWasInGroup"]}
 
-    # ---------- QUERIES (READ) ----------
-
-    def get_student_subjects(self, studentMongoId: str) -> List[Dict[str, Any]]:
+    def unlink_equivalence_by_subject(self, subjectId: str, levelStage: str) -> Dict[str, Any]:
         cypher = f"""
-        MATCH (s:{LABEL_STUDENT} {{mongoId: $studentMongoId}})-[r:{REL_TOOK}]->(sub:{LABEL_SUBJECT})
-        RETURN sub.id AS subjectId, sub, r
-        ORDER BY coalesce(r.year, 0) DESC
-        """
-        with self.driver.session() as session:
-            results = session.run(cypher, {"studentMongoId": studentMongoId})
-            out: List[Dict[str, Any]] = []
-            for rec in results:
-                out.append({
-                    "subject": {"id": str(rec["subjectId"]), **dict(rec["sub"])},
-                    "took": dict(rec["r"])
-                })
-            return out
+        MATCH (s:{LABEL_SUBJECT} {{id: $subjectId}})
 
+        OPTIONAL MATCH (pred:{LABEL_SUBJECT})-[rin:{REL_EQUIVALENT_TO} {{levelStage: $levelStage}}]->(s)
+        OPTIONAL MATCH (s)-[rout:{REL_EQUIVALENT_TO} {{levelStage: $levelStage}}]->(succ:{LABEL_SUBJECT})
+
+        WITH s, pred, succ, rin, rout
+        WHERE pred IS NOT NULL AND succ IS NOT NULL
+
+        WITH s, pred, succ, rin, rout,
+            CASE WHEN pred.id = succ.id THEN 'PAIR' ELSE 'CYCLE' END AS kind
+
+        // borrar aristas que conectan a s dentro del grupo
+        DELETE rin
+        DELETE rout
+
+        // si era ciclo (>=3), puenteo pred -> succ para mantener ciclo
+        FOREACH (_ IN CASE WHEN kind = 'CYCLE' THEN [1] ELSE [] END |
+            MERGE (pred)-[rnew:{REL_EQUIVALENT_TO} {{levelStage: $levelStage}}]->(succ)
+            ON CREATE SET rnew.createdAt = datetime()
+        )
+
+        RETURN true AS deleted, kind AS kind, pred.id AS predecessorId, succ.id AS successorId, s.id AS removedId
+        """
+
+        params = {"subjectId": subjectId, "levelStage": str(levelStage)}
+        with self.driver.session() as session:
+            rec = session.run(cypher, params).single()
+
+            if rec is None:
+                # no tenía pred o succ en ese levelStage -> no pertenece a grupo
+                return {"deleted": False}
+
+            return {
+                "deleted": bool(rec["deleted"]),
+                "kind": rec["kind"],              # 'PAIR' o 'CYCLE'
+                "removedId": rec["removedId"],
+                "predecessorId": rec["predecessorId"],
+                "successorId": rec["successorId"],
+            }
+    
     def are_equivalent_by_cycle(self, aId: str, bId: str, levelStage: str) -> bool:
         cypher = f"""
         MATCH (a:{LABEL_SUBJECT} {{id: $aId}})
@@ -186,4 +255,43 @@ class Neo4jGraphRepository:
         with self.driver.session() as session:
             rec = session.run(cypher, params).single()
             return bool(rec) and bool(rec["equivalent"])
+
+
+    # ---------- QUERIES (READ) ----------
+
+    def get_student_subjects(self, studentMongoId: str) -> List[Dict[str, Any]]:
+        cypher = f"""
+        MATCH (s:{LABEL_STUDENT} {{mongoId: $studentMongoId}})-[r:{REL_TOOK}]->(sub:{LABEL_SUBJECT})
+        RETURN sub.id AS subjectId, sub, r
+        ORDER BY coalesce(r.year, 0) DESC
+        """
+        with self.driver.session() as session:
+            results = session.run(cypher, {"studentMongoId": studentMongoId})
+            out: List[Dict[str, Any]] = []
+            for rec in results:
+                out.append({
+                    "subject": {"id": str(rec["subjectId"]), **dict(rec["sub"])},
+                    "took": dict(rec["r"])
+                })
+            return out
+
+    # ESTE TE PIDE LA LEVELSTAGE PARA DARTE TODAS LAS MATERIAS EQUIVALENTES DEL GRUPO QUE PERTENECE A UNA MATERIA    
+    def get_equivalences_group(self, subjectId: str, levelStage: str) -> List[Dict[str, Any]]:
+        cypher = f"""
+        MATCH (s:{LABEL_SUBJECT} {{id: $subjectId}})
+        MATCH p = (s)-[:{REL_EQUIVALENT_TO}*0..]-(eq:{LABEL_SUBJECT})
+        WHERE ALL(r IN relationships(p) WHERE toString(r.levelStage) = toString($levelStage))
+        RETURN DISTINCT
+            eq.id AS id,
+            eq.name AS name,
+            eq.institutionMongoId AS institutionMongoId
+        ORDER BY coalesce(name, "") ASC
+        """
+        params = {"subjectId": subjectId, "levelStage": levelStage}
+        with self.driver.session() as session:
+            res = session.run(cypher, params)
+            return [dict(r) for r in res]
+
+
+        
 

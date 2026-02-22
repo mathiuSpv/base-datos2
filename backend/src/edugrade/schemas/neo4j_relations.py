@@ -25,6 +25,10 @@ class EquivalentToIn(BaseModel):
     toSubjectId: str     # UUID (Subject.id)
     levelStage: str         # ej "19"    
 
+class EquivalentRemoveIn(BaseModel):
+    subjectId: str
+    levelStage: str  # "19"
+
 #class EquivalentTo(BaseModel):  # NO SE USA PORQUE NO ESTAMOS VIENDO EQUIVALENCIAS, SINO TRAYECTORIA ACADÉMICA
 #    fromSubjectId: str
 #    toSubjectId: str
