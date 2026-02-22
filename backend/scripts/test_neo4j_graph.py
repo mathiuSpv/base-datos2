@@ -25,12 +25,40 @@ def main():
     print("Subjects:", sub1, sub2, sub3)
 
     # 4) link took (year/grade obligatorios)
-    print("Link took sub1:", neo.link_took(student_id, sub1["id"], 2025, "UNI1"))
-    print("Link took sub2:", neo.link_took(student_id, sub2["id"], 2025, "UNI1"))
-    print("Link took sub3:", neo.link_took(student_id, sub3["id"], 2026, "UNI2"))
+    print("Link took sub1:", neo.link_took(student_id, sub1["id"], "2025-03-01", "UNI1", None))
+    print("Link took sub2:", neo.link_took(student_id, sub2["id"], "2025-03-01", "UNI1", "2025-12-01"))
+    print("Link took sub3:", neo.link_took(student_id, sub3["id"], "2026-03-01", "UNI2", None))
 
     # 5) read
     print("Student subjects:", neo.get_student_subjects(student_id))
+
+    # 6) equivalent (nivel 19)
+    level = "19"
+
+    try:
+        print("Add eq sub1->sub2:", neo.add_equivalence(sub1["id"], sub2["id"], level))
+        print("Add eq sub2->sub3:", neo.add_equivalence(sub2["id"], sub3["id"], level))
+
+        # Esta línea va a fallar por diseño (target ya está en grupo):
+        print("Add eq sub3->sub1:", neo.add_equivalence(sub3["id"], sub1["id"], level))
+
+    except Exception as e:
+        print("Equivalence test failed (expected in some cases):", e)
+
+    # Chequeos (si el grupo quedó armado con 2 inserts, esto debería dar True)
+    print("Cycle eq sub1 & sub2?:", neo.are_equivalent_by_cycle(sub1["id"], sub2["id"], level))
+    print("Cycle eq sub1 & sub3?:", neo.are_equivalent_by_cycle(sub1["id"], sub3["id"], level))
+
+    print("Cycle nivel 20 (debería ser False):",
+        neo.are_equivalent_by_cycle(sub1["id"], sub2["id"], "20"))
+
+    # 7) equivalent falso nivel 20
+    print("Cycle nivel 20 (debería ser False):",
+        neo.are_equivalent_by_cycle(sub1["id"], sub2["id"], "20"))
+    
+    # 8 delete student
+    #print("Delete student:", neo.delete_student(student_id))
+    #print("Read subjects after delete (should be empty or error):", neo.get_student_subjects(student_id))
 
 if __name__ == "__main__":
     main()

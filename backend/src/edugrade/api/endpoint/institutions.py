@@ -3,11 +3,15 @@ from edugrade.schemas.mongo.institution import InstitutionCreate, InstitutionOut
 from edugrade.services.mongo.institution import InstitutionService
 from edugrade.core.db import get_mongo_db
 from edugrade.services.neo4j_graph import Neo4jGraphService, get_neo4j_service
+from edugrade.schemas.neo4j_subject import SubjectOut
 
 router = APIRouter(prefix="/institutions", tags=["institutions"])
 
 def get_service(db=Depends(get_mongo_db)) -> InstitutionService:
   return InstitutionService(db)
+
+def svc_dep() -> Neo4jGraphService:
+    return get_neo4j_service()
 
 @router.post("", response_model=InstitutionOut, status_code=status.HTTP_201_CREATED)
 async def create_institution(
@@ -25,6 +29,16 @@ async def create_institution(
 @router.get("/{institution_id}", response_model=InstitutionOut)
 async def get_institution(institution_id: str, svc: InstitutionService = Depends(get_service)):
   return await svc.get(institution_id)
+
+@router.get("/{institutionMongoId}/subjects", response_model=list[SubjectOut])
+def get_subjects_by_institution(
+    institutionMongoId: str,
+    svc: Neo4jGraphService = Depends(svc_dep),
+):
+    try:
+        return svc.get_subjects_by_institution(institutionMongoId)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 @router.get("", response_model=list[InstitutionOut])
 async def list_institutions(
