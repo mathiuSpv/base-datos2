@@ -17,7 +17,7 @@ async def create_student(
   mongo_response = await svc.create(payload.model_dump(), audit=audit)
   if mongo_response is None:
     return None
-  return 
+  return mongo_response
 
 
 
