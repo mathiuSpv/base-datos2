@@ -1,6 +1,6 @@
 from edugrade.core.neo4j_db import get_neo4j_driver
 from edugrade.repository.neo4j_graph import Neo4jGraphRepository
-
+from typing import Any, Dict, List
 
 class Neo4jGraphService:
     def __init__(self):
@@ -76,6 +76,12 @@ class Neo4jGraphService:
     
     def get_student_history_rows(self, studentMongoId: str):
         return self.repo.get_student_history_rows(studentMongoId)
+    
+    def get_student_enrollments(self, studentMongoId: str) -> List[Dict[str, Any]]:
+        return self.repo.get_student_enrollments(studentMongoId)
+
+    def get_student_subject_rows(self, studentMongoId: str) -> List[Dict[str, Any]]:
+        return self.repo.get_student_subject_rows(studentMongoId)
 
     # def recommend_subjects_for_student(self, studentId: str, limit: int = 10):
     #     return self.repo.recommend_subjects_for_student(studentId, limit)

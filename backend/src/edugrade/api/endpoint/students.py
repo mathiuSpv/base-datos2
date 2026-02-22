@@ -26,6 +26,26 @@ async def create_student(
   neo.upsert_student(student_id)
   return mongo_response
 
+@router.post("/{student_id}/institution", status_code=status.HTTP_204_NO_CONTENT)
+async def link_student_institution(
+  student_id: str,
+  institution_id: str = Query(...),
+  start: str  = Query(...),
+  end: str = Query(default=None),
+  audit: AuditContext = Depends(get_audit_context),
+  neo: Neo4jGraphService = Depends(get_neo4j_service)):
+  return neo.link_studies_at(student_id, institution_id, start, end)
+
+@router.post("/{student_id}/subject", status_code=status.HTTP_204_NO_CONTENT)
+async def link_student_subject(
+  student_id: str,
+  subject_id: str = Query(...),
+  start: str  = Query(...),
+  grade: str = Query(...),
+  end: str = Query(default=None),
+  audit: AuditContext = Depends(get_audit_context),
+  neo: Neo4jGraphService = Depends(get_neo4j_service)):
+  return neo.link_took(student_id, subject_id, start, grade, end)
 
 @router.get("/{student_id}", response_model=StudentOut)
 async def get_student(student_id: str, svc: StudentService = Depends(get_service)):

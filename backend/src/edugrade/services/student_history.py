@@ -30,82 +30,101 @@ class StudentHistoryService:
   async def get_history(self, student_id: str) -> dict:
     if not is_objectid_hex(student_id):
       raise HTTPException(status_code=400, detail="Invalid studentId")
-    
-    rows = self.neo.get_student_history_rows(student_id)
-    if not rows:
-      return {"years": []}
-    
-    inst_ids = sorted({r["institutionMongoId"] for r in rows})
-    inst_docs = await self.inst_repo.get_by_ids(inst_ids)
-    inst_name_by_id = {str(d["_id"]): d.get("name") for d in inst_docs if d.get("name")}
 
-    enrollment_by_inst: dict[str, tuple[date, date | None]] = {}
-    for r in rows:
-      iid = r["institutionMongoId"]
+    enrollments = self.neo.get_student_enrollments(student_id)
+    subjects = self.neo.get_student_subject_rows(student_id)
+
+    if not enrollments:
+      return {"years": []}
+
+    # --- nombres de instituciones (Mongo) ---
+    inst_ids = sorted({e["institutionMongoId"] for e in enrollments})
+    inst_docs = []
+    for iid in inst_ids:
+      inst_docs.append(await self.inst_repo.get_one(iid))
+
+    inst_name_by_id = {
+      iid: d.get("name")
+      for iid, d in zip(inst_ids, inst_docs)
+      if d and d.get("name")
+    }
+
+    # --- enrollments separados por (institution, enrollmentId) ---
+    enrollment_by_key: dict[tuple[str, int], tuple[date, date | None]] = {}
+    for e in enrollments:
+      iid = e["institutionMongoId"]
+      eid = e["enrollmentId"]
 
       try:
-        inst_from = date.fromisoformat(r["institutionStartDate"])
+        inst_from = date.fromisoformat(e["institutionStartDate"])
       except Exception:
         raise HTTPException(status_code=500, detail="Neo4j data error: invalid institutionStartDate")
 
       inst_to = None
-      if r.get("institutionEndDate"):
+      if e.get("institutionEndDate"):
         try:
-          inst_to = date.fromisoformat(r["institutionEndDate"])
+          inst_to = date.fromisoformat(e["institutionEndDate"])
         except Exception:
           raise HTTPException(status_code=500, detail="Neo4j data error: invalid institutionEndDate")
 
-      if iid not in enrollment_by_inst:
-        enrollment_by_inst[iid] = (inst_from, inst_to)
-      else:
-        cur_fr, cur_to = enrollment_by_inst[iid]
-        new_fr = min(cur_fr, inst_from)
-        if cur_to is None or inst_to is None:
-          new_to = None
-        else:
-          new_to = max(cur_to, inst_to)
-        enrollment_by_inst[iid] = (new_fr, new_to)
+      enrollment_by_key[(iid, eid)] = (inst_from, inst_to)
 
-    periods = [(fr, _coalesce_end(to)) for fr, to in enrollment_by_inst.values()]
+    periods = [(fr, _coalesce_end(to)) for fr, to in enrollment_by_key.values()]
     min_year = min(fr.year for fr, _ in periods)
     max_year = max(to.year for _, to in periods)
-    
-    rows_by_inst: dict[str, list[dict]] = {}
-    for r in rows:
-      rows_by_inst.setdefault(r["institutionMongoId"], []).append(r)
+
+    # --- parse subjects una sola vez (así no repetimos date.fromisoformat) ---
+    parsed_subjects = []
+    for s in subjects:
+      if not s.get("subjectStartDate"):
+        continue
+
+      try:
+        s_from = date.fromisoformat(s["subjectStartDate"])
+      except Exception:
+        raise HTTPException(status_code=500, detail="Neo4j data error: invalid subjectStartDate")
+
+      s_to = None
+      if s.get("subjectEndDate"):
+        try:
+          s_to = date.fromisoformat(s["subjectEndDate"])
+        except Exception:
+          raise HTTPException(status_code=500, detail="Neo4j data error: invalid subjectEndDate")
+
+      parsed_subjects.append({
+        "subjectId": s.get("subjectId"),
+        "subjectName": s.get("subjectName"),
+        "from": s_from,
+        "to": s_to,
+      })
 
     years_out: list[dict] = []
     for y in range(min_year, max_year + 1):
       y_from, y_to = _year_start(y), _year_end(y)
       institutions_out: list[dict] = []
 
-      for iid, (inst_from, inst_to_opt) in enrollment_by_inst.items():
+      for (iid, eid), (inst_from, inst_to_opt) in enrollment_by_key.items():
         inst_to = _coalesce_end(inst_to_opt)
         if not _intersects(inst_from, inst_to, y_from, y_to):
           continue
 
         subjects_out: list[dict] = []
-        for rr in rows_by_inst.get(iid, []):
-          try:
-            s_from = date.fromisoformat(rr["subjectStartDate"])
-          except Exception:
-            raise HTTPException(status_code=500, detail="Neo4j data error: invalid subjectStartDate")
 
-          s_to = None
-          if rr.get("subjectEndDate"):
-            try:
-              s_to = date.fromisoformat(rr["subjectEndDate"])
-            except Exception:
-              raise HTTPException(status_code=500, detail="Neo4j data error: invalid subjectEndDate")
+        # asignar materias por intersección de fechas con el enrollment
+        for ps in parsed_subjects:
+          s_from = ps["from"]
+          s_to = _coalesce_end(ps["to"])
 
+          if not _intersects(inst_from, inst_to, s_from, s_to):
+            continue
           if s_from.year != y:
             continue
 
           subjects_out.append({
-            "subjectId": rr["subjectId"],
-            "name": rr["subjectName"],  # Neo4j
+            "subjectId": ps["subjectId"],
+            "name": ps["subjectName"],
             "fromDate": s_from.isoformat(),
-            "toDate": s_to.isoformat() if s_to else None,
+            "toDate": ps["to"].isoformat() if ps["to"] else None,
           })
 
         subjects_out.sort(key=lambda x: x["fromDate"])
@@ -114,8 +133,13 @@ class StudentHistoryService:
           "institutionId": iid,
           "name": inst_name_by_id.get(iid),
           "subjects": subjects_out,
+          # opcional (recomendado para entender 2023 vs 2025)
+          # "enrollmentId": eid,
+          # "fromDate": inst_from.isoformat(),
+          # "toDate": inst_to_opt.isoformat() if inst_to_opt else None,
         })
 
-      years_out.append({"year": y, "institutions": institutions_out})
+      if institutions_out:
+        years_out.append({"year": y, "institutions": institutions_out})
 
     return {"years": years_out}
