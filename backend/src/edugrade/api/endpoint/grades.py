@@ -23,14 +23,17 @@ async def get_exam(
 
 @router.get("", response_model=list[GradeOut])
 async def list_exams(
-  subjectId: str | None = Query(default=None),
-  studentId: str | None = Query(default=None),
-  institutionId: str | None = Query(default=None),
+  subjectId: str = Query(..., min_length=1),
+  studentId: str = Query(..., min_length=1),
+  institutionId: str = Query(..., min_length=1),
   fromDate: date = Query(...),
   toDate: date = Query(...),
   limit: int = Query(default=50, ge=1, le=200),
   skip: int = Query(default=0, ge=0),
-  targetSystem: str | None = Query(default=None, description="None => original; 'ZA' => ZA; other => convert from ZA to that system"),
+  targetSystem: str | None = Query(
+    default=None,
+    description="None => original; 'ZA' => ZA; other => convert from ZA to that system"
+  ),
   svc: GradeService = Depends(get_service),
 ):
   return await svc.list_projected(subjectId, studentId, institutionId, fromDate, toDate, limit, skip, targetSystem)

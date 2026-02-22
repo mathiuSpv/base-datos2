@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request
 from edugrade.config import settings
 from edugrade.startup import lifespan
 from edugrade.api.router import router as api_router
+from edugrade.audit.routes import router as audit_router
 from edugrade.audit.middleware import request_context_middleware
 
 app = FastAPI(

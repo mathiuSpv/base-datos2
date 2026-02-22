@@ -81,8 +81,8 @@ class GradeService:
       subject_id=subject_id,
       student_id=student_id,
       institution_id=institution_id,
-      date_from=date_from,
-      date_to=date_to,
+      date_from=date_to_datetime_utc(date_from),
+      date_to=date_to_datetime_utc(date_to),
       limit=limit,
       skip=skip,
     )

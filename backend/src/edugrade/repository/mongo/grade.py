@@ -1,4 +1,4 @@
-from datetime import date as date_type
+from datetime import datetime
 from bson import ObjectId
 
 class GradeRepository:
@@ -24,8 +24,8 @@ class GradeRepository:
     subject_id: str,
     student_id: str,
     institution_id: str,
-    date_from: date_type,
-    date_to: date_type,
+    date_from: datetime,
+    date_to: datetime,
     limit: int,
     skip: int,
   ) -> list[dict]:
