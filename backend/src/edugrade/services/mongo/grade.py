@@ -24,7 +24,6 @@ class GradeService:
 
   async def create(self, payload: dict, audit: AuditContext) -> dict:
     async def _do() -> dict:
-      # Validaciones de IDs (subjectId = UUID, studentId/institutionId = ObjectId hex)
       subject_id = payload.get("subjectId")
       if not (isinstance(subject_id, str) and is_uuid(subject_id)):
         raise HTTPException(status_code=400, detail="Invalid subjectId")

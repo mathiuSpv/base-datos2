@@ -6,14 +6,15 @@ from edugrade.services.mongo.institution import InstitutionService
 from edugrade.core.db import get_mongo_db
 from edugrade.services.neo4j_graph import Neo4jGraphService, get_neo4j_service
 from edugrade.schemas.neo4j.subject import SubjectOut, SubjectUpsertIn
+
 from edugrade.audit.context import AuditContext, get_audit_context
 from edugrade.audit.exec import audited
-from fastapi.concurrency import run_in_threadpool
+import asyncio
+async def _neo(callable_, *args, **kwargs):
+    return await asyncio.to_thread(callable_, *args, **kwargs)
 
-router = APIRouter(prefix="/institutions", tags=["institutions"])
-
-def get_service(request: Request, db=Depends(get_mongo_db)) -> InstitutionService:
-  return InstitutionService(db, request.app.state.audit_logger)
+def get_service(db=Depends(get_mongo_db)) -> InstitutionService:
+  return InstitutionService(db)
 
 def get_student_service(request: Request, db=Depends(get_mongo_db)) -> StudentService:
   return StudentService(db, equest.app.state.audit_logger)
@@ -27,12 +28,16 @@ async def create_institution(
   audit: AuditContext = Depends(get_audit_context),
   svc: InstitutionService = Depends(get_service),
   neo: Neo4jGraphService = Depends(get_neo4j_service)):
+  
   mongo_response = await svc.create(payload.model_dump(),audit=audit)
+  institution_id = None
   if isinstance(mongo_response, dict):
     institution_id = mongo_response.get("id") or mongo_response.get("_id")
+
   if not institution_id:
     raise HTTPException(status_code=500, detail="Institution created in Mongo but id not found in response")
-  neo.upsert_institution(str(institution_id))
+
+  await _neo(neo.upsert_institution, str(institution_id))
   return mongo_response
 
 @router.get("/{institution_id}", response_model=InstitutionOut)
@@ -40,12 +45,12 @@ async def get_institution(institution_id: str, svc: InstitutionService = Depends
   return await svc.get(institution_id)
 
 @router.get("/{institutionMongoId}/subjects", response_model=list[SubjectOut])
-def get_subjects_by_institution(
+async def get_subjects_by_institution(
     institutionMongoId: str,
     svc: Neo4jGraphService = Depends(svc_dep),
 ):
     try:
-      return svc.get_subjects_by_institution(institutionMongoId)
+      return await _neo(svc.get_subjects_by_institution, institutionMongoId)
     except Exception as e:
       raise HTTPException(status_code=400, detail=str(e))
 
@@ -64,8 +69,10 @@ async def list_institutions(
 async def list_institutions_for_student(
   student_id: str,
   svc: InstitutionService = Depends(get_service),
-  neo: Neo4jGraphService = Depends(get_neo4j_service)):
-  institution_ids = neo.get_student_institutions(student_id)
+  neo: Neo4jGraphService = Depends(get_neo4j_service),
+):
+  institution_ids = await _neo(neo.get_student_institutions, student_id)
+
   results: list[InstitutionOut] = []
   for institution_id in institution_ids:
     inst = await svc.get(institution_id)
@@ -78,9 +85,9 @@ async def list_institutions_for_student(
 async def list_students_for_institution(
   institution_id: str,
   student_svc: StudentService = Depends(get_student_service),
-  neo: Neo4jGraphService = Depends(get_neo4j_service)
+  neo: Neo4jGraphService = Depends(get_neo4j_service),
 ):
-  student_ids: list[str] = neo.get_students_by_institution(institution_id)
+  student_ids: list[str] = await _neo(neo.get_students_by_institution, institution_id)
 
   out: list[StudentOut] = []
   for sid in student_ids:
@@ -92,7 +99,6 @@ async def list_students_for_institution(
 async def create_subject_for_institution(
     institution_id: str,
     name: str = Query(...),
-
     audit: AuditContext = Depends(get_audit_context),
     neo: Neo4jGraphService = Depends(get_neo4j_service),
     request: Request = None,
@@ -100,7 +106,7 @@ async def create_subject_for_institution(
     audit_logger = request.app.state.audit_logger
 
     async def _do():
-        return await run_in_threadpool(neo.upsert_subject, payload.name, institution_id)
+        return await _neo(neo.upsert_subject, name, institution_id)
 
     try:
         subject = await audited(
