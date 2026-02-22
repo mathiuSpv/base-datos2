@@ -2,56 +2,98 @@ from __future__ import annotations
 
 from datetime import datetime, timezone, date as date_type
 from collections import defaultdict
+from typing import Any
+
 from bson import ObjectId
 from fastapi import HTTPException
 
+from edugrade.audit.context import AuditContext
+from edugrade.audit.exec import audited
 from edugrade.repository.mongo.grade import GradeRepository
 from edugrade.services.mongo.conversion_rules import ConversionRulesService
-
+from edugrade.utils.date import date_to_datetime_utc, ensure_date, ensure_date_range
 from edugrade.utils.object_id import is_objectid_hex, is_uuid
 from edugrade.utils.string import non_empty_str
-from edugrade.utils.date import date_to_datetime_utc, ensure_date, ensure_date_range
 
 
 class GradeService:
-
-  def __init__(self, db):
+  def __init__(self, db, audit_logger):
     self.repo = GradeRepository(db)
     self.conv = ConversionRulesService(db)
+    self.audit_logger = audit_logger
 
-  async def create(self, payload: dict) -> dict:
-    subject_id = payload.get("subjectId")
-    if not (isinstance(subject_id, str) and is_uuid(subject_id)):
-      raise HTTPException(status_code=400, detail=f"Invalid subjectId")
-    for k in ("studentId", "institutionId"):
-      v = payload.get(k)
-      if not (isinstance(v, str) and is_objectid_hex(v)):
-        raise HTTPException(status_code=400, detail=f"Invalid {k}")
+  async def create(self, payload: dict, audit: AuditContext) -> dict:
+    async def _do() -> dict:
+      subject_id = payload.get("subjectId")
+      if not (isinstance(subject_id, str) and is_uuid(subject_id)):
+        raise HTTPException(status_code=400, detail="Invalid subjectId")
 
-    try:
-      system = non_empty_str(payload.get("system"), "system")
-      country = non_empty_str(payload.get("country"), "country")
-      grade = non_empty_str(payload.get("grade"), "grade")
-      value = non_empty_str(payload.get("value"), "value")
-      when = date_to_datetime_utc(ensure_date(payload.get("date"), "date"))
-      
-    except ValueError as e:
-      raise HTTPException(status_code=400, detail=str(e))
+      for k in ("studentId", "institutionId"):
+        v = payload.get(k)
+        if not (isinstance(v, str) and is_objectid_hex(v)):
+          raise HTTPException(status_code=400, detail=f"Invalid {k}")
 
-    value_converted_za = await self.conv.convert_to_za(
-      value=value,
-      system=system,
-      country=country,
-      grade=grade,
-      when=when,
+      # Validaciones de strings / date
+      try:
+        system = non_empty_str(payload.get("system"), "system")
+        country = non_empty_str(payload.get("country"), "country")
+        grade = non_empty_str(payload.get("grade"), "grade")
+        value = non_empty_str(payload.get("value"), "value")
+        when = date_to_datetime_utc(ensure_date(payload.get("date"), "date"))
+      except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+      # Conversión a ZA
+      value_converted_za = await self.conv.convert_to_za(
+        value=value,
+        system=system,
+        country=country,
+        grade=grade,
+        when=when,
+      )
+
+      doc = dict(payload)
+      doc["date"] = when
+      doc["valueConverted"] = value_converted_za
+      doc["createdAt"] = datetime.now(timezone.utc)
+
+      return await self.repo.create(doc)
+
+    return await audited(
+      audit_logger=self.audit_logger,
+      audit=audit,
+      operation="CREATE",
+      db="mongo",
+      entity_type="Grade",
+      entity_id="(pending)",
+      payload_summary=(
+        "grade create; "
+        f"system={payload.get('system')} country={payload.get('country')} grade={payload.get('grade')}"
+      ),
+      fn=_do,
+      entity_id_from_result=lambda doc: str(doc.get("_id") or doc.get("id") or "(missing)"),
     )
 
-    doc = dict(payload)
-    doc["date"] = when
-    doc["valueConverted"] = value_converted_za
-    doc["createdAt"] = datetime.now(timezone.utc)
+  async def delete(self, grade_id: str, audit: AuditContext) -> None:
+    if not ObjectId.is_valid(grade_id):
+      raise HTTPException(status_code=400, detail="Invalid id")
 
-    return await self.repo.create(doc)
+    async def _do() -> None:
+      ok = await self.repo.delete(ObjectId(grade_id))
+      if not ok:
+        raise HTTPException(status_code=404, detail="Grade not found")
+      return None
+
+    await audited(
+      audit_logger=self.audit_logger,
+      audit=audit,
+      operation="DELETE",
+      db="mongo",
+      entity_type="Grade",
+      entity_id=grade_id,
+      payload_summary="grade delete",
+      fn=_do,
+    )
 
   async def get(self, grade_id: str) -> dict:
     if not ObjectId.is_valid(grade_id):
@@ -84,8 +126,8 @@ class GradeService:
       subject_id=subject_id,
       student_id=student_id,
       institution_id=institution_id,
-      date_from=date_to_datetime_utc(date_from),
-      date_to=date_to_datetime_utc(date_to),
+      date_from=date_from,
+      date_to=date_to,
       limit=limit,
       skip=skip,
     )
@@ -154,8 +196,10 @@ class GradeService:
     projected_values: list[str | None] = [None] * len(docs)
 
     for (country, grade, when), idxs in groups.items():
+      # OJO: en tu código pegado aparece "from_system" pero tu ConversionRulesService
+      # que mostraste usa "system=" en get_rule_for_date. Acá uso "system=".
       rule = await self.conv.get_rule_for_date(
-        from_system=ts,
+        system=ts,
         country=country,
         grade=grade,
         when=when,
