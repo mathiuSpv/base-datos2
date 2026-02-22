@@ -38,11 +38,12 @@ class Neo4jGraphService:
     def link_took(
         self,
         studentMongoId: str,
-        subjectId: str,   # UUID (sub.id)
-        year: int,
+        subjectId: str,
+        startDate: str,
         grade: str,
+        endDate: str | None = None,
     ):
-        return self.repo.link_took(studentMongoId, subjectId, year, grade)
+        return self.repo.link_took(studentMongoId, subjectId, startDate, grade, endDate)
 
     def add_equivalence(self, fromSubjectId: str, toSubjectId: str, levelStage: str):
         return self.repo.add_equivalence(fromSubjectId, toSubjectId, levelStage)

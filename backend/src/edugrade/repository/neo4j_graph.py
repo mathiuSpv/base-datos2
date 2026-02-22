@@ -119,22 +119,25 @@ class Neo4jGraphRepository:
     def link_took(
         self,
         studentMongoId: str,
-        subjectId: str,   # ahora es UUID
-        year: int,
+        subjectId: str,          # UUID
+        startDate: str,          # ISO string
         grade: str,
+        endDate: Optional[str] = None,
     ) -> Dict[str, Any]:
         cypher = f"""
         MATCH (s:{LABEL_STUDENT} {{mongoId: $studentMongoId}})
         MATCH (sub:{LABEL_SUBJECT} {{id: $subjectId}})
         MERGE (s)-[r:{REL_TOOK}]->(sub)
-        SET r.year  = $year,
-            r.grade = $grade
+        SET r.startDate = $startDate,
+            r.endDate   = $endDate,
+            r.grade     = $grade
         RETURN r
         """
         params = {
             "studentMongoId": studentMongoId,
-            "subjectId": subjectId,  # UUID string
-            "year": year,
+            "subjectId": subjectId,
+            "startDate": startDate,
+            "endDate": endDate,
             "grade": grade,
         }
         with self.driver.session() as session:
@@ -276,7 +279,7 @@ class Neo4jGraphRepository:
         cypher = f"""
         MATCH (s:{LABEL_STUDENT} {{mongoId: $studentMongoId}})-[r:{REL_TOOK}]->(sub:{LABEL_SUBJECT})
         RETURN sub.id AS subjectId, sub, r
-        ORDER BY coalesce(r.year, 0) DESC
+        ORDER BY coalesce(r.startDate, "") DESC
         """
         with self.driver.session() as session:
             results = session.run(cypher, {"studentMongoId": studentMongoId})

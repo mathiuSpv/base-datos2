@@ -25,9 +25,9 @@ def main():
     print("Subjects:", sub1, sub2, sub3)
 
     # 4) link took (year/grade obligatorios)
-    print("Link took sub1:", neo.link_took(student_id, sub1["id"], 2025, "UNI1"))
-    print("Link took sub2:", neo.link_took(student_id, sub2["id"], 2025, "UNI1"))
-    print("Link took sub3:", neo.link_took(student_id, sub3["id"], 2026, "UNI2"))
+    print("Link took sub1:", neo.link_took(student_id, sub1["id"], "2025-03-01", "UNI1", None))
+    print("Link took sub2:", neo.link_took(student_id, sub2["id"], "2025-03-01", "UNI1", "2025-12-01"))
+    print("Link took sub3:", neo.link_took(student_id, sub3["id"], "2026-03-01", "UNI2", None))
 
     # 5) read
     print("Student subjects:", neo.get_student_subjects(student_id))

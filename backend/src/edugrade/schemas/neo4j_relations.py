@@ -16,9 +16,10 @@ class StudiesAtIn(BaseModel):
 
 class TookIn(BaseModel):
     studentMongoId: str
-    subjectId: str # antes era subjectNeoId
-    year: int # Ejemplo: 2023
-    grade: str # Ejemplo: "S6" (Secundaria 6to) | quitar optional | grade se trae del front
+    subjectId: str          # UUID (Subject.id)
+    startDate: str          # ISO "YYYY-MM-DD"
+    endDate: Optional[str] = None  # ISO "YYYY-MM-DD"
+    grade: str              # Ej: "UNI1"
 
 class EquivalentToIn(BaseModel):
     fromSubjectId: str   # UUID (Subject.id)
