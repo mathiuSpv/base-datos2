@@ -1,3 +1,4 @@
+from datetime import date
 from pydantic import BaseModel, Field, ConfigDict
 from edugrade.core.mongo_types import PyObjectId
 
@@ -16,3 +17,8 @@ class InstitutionOut(BaseModel):
     name: str
     country: str
     address: str
+    
+class StudentInstitutionOut(BaseModel):
+    institution: InstitutionOut
+    startDate: date | None = None
+    endDate: date | None = None

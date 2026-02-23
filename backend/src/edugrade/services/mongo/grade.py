@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone, date as date_type
+from datetime import datetime, timezone, date
 from collections import defaultdict
 from typing import Any
 
@@ -109,8 +109,8 @@ class GradeService:
     subject_id: str,
     student_id: str,
     institution_id: str,
-    date_from: date_type,
-    date_to: date_type,
+    date_from: date,
+    date_to: date,
     limit: int,
     skip: int,
   ) -> list[dict]:
@@ -126,8 +126,8 @@ class GradeService:
       subject_id=subject_id,
       student_id=student_id,
       institution_id=institution_id,
-      date_from=date_from,
-      date_to=date_to,
+      date_from=date_to_datetime_utc(date_from),
+      date_to=date_to_datetime_utc(date_to),
       limit=limit,
       skip=skip,
     )
@@ -141,13 +141,16 @@ class GradeService:
     subject_id: str,
     student_id: str,
     institution_id: str,
-    date_from: date_type,
-    date_to: date_type,
+    date_from: date,
+    date_to: date,
     limit: int,
     skip: int,
     target_system: str | None,
   ) -> list[dict]:
-    docs = await self.list_by_period(subject_id, student_id, institution_id, date_from, date_to, limit, skip)
+    docs = await self.list_by_period(
+      subject_id, student_id, institution_id,
+      date_to_datetime_utc(date_from), date_to_datetime_utc(date_to),
+      limit, skip)
     return await self._project_many(docs, target_system)
 
   def _inject_display(self, doc: dict, display_value: str, display_system: str) -> dict:
@@ -181,7 +184,7 @@ class GradeService:
         out.append(self._inject_display(d, str(vza), "ZA"))
       return out
 
-    groups: dict[tuple[str, str, date_type], list[int]] = defaultdict(list)
+    groups: dict[tuple[str, str, date], list[int]] = defaultdict(list)
 
     for idx, d in enumerate(docs):
       try:

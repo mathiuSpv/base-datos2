@@ -310,8 +310,12 @@ class Neo4jGraphRepository:
 
     def get_institutions_by_student(self, studentId: str):
         query = """
-        MATCH (s:Student {mongoId: $studentId})-[:STUDIES_AT]->(i:Institution)
-        RETURN i.mongoId AS institutionId
+        MATCH (s:Student {mongoId: $studentId})-[e:STUDIES_AT]->(i:Institution)
+        RETURN
+        i.mongoId AS institutionId,
+        e.startDate AS startDate,
+        e.endDate AS endDate
+        ORDER BY e.startDate ASC
         """
 
         with self.driver.session() as session:

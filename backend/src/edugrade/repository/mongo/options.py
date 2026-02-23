@@ -6,7 +6,7 @@ class OptionsRepository:
     await self.col.create_index("key", unique=True)
 
   async def get_by_key(self, key: str) -> dict | None:
-    return await self.col.find_one({"key": key})
+    return await self.col.find_one({"key": key}, {"_id": 0})
 
   async def get_grade_map(self) -> dict[str, int] | None:
     doc = await self.get_by_key("grade")

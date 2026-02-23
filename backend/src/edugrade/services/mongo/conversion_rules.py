@@ -50,13 +50,14 @@ class ConversionRulesService:
     grade: str,
     when: date_type,
   ) -> str:
+    
     rule = await self.get_rule_for_date(
       system=system,
       country=country,
       grade=grade,
       when=when,
     )
-
+    
     key = normalize_value_key(value)
     mapping: dict[str, str] = rule.get("map", {})
     if key not in mapping:

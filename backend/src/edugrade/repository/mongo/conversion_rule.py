@@ -34,7 +34,7 @@ class ConversionRuleRepository:
     grade: str,
     when: date_type,
   ) -> dict | None:
-
+    print(f"Finding conversion rule for system={system} country={country} grade={grade} when={when}")
     return await self.col.find_one(
       {
       "system": system,
