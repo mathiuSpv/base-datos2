@@ -77,11 +77,33 @@ class ConversionRulesService:
       when=when,
     )
 
-    key = normalize_value_key(value_za)
     mapping: dict[str, str] = rule.get("map", {})
-    if key not in mapping:
-      raise HTTPException(status_code=422, detail=f"ZA value '{key}' not convertible to system '{to_system}'")
-    return str(mapping[key])
+    if not mapping:
+      raise HTTPException(status_code=422, detail=f"No conversion mapping found for system '{to_system}'")
+
+    # Normaliza "6,5" -> "6.5", trims, etc (según tu impl)
+    key = normalize_value_key(value_za)
+
+    # 1) Match exacto: comportamiento actual
+    if key in mapping:
+      return str(mapping[key])
+
+    # 2) Si no hay match exacto, cuantizamos a la key más cercana (para promedios tipo 6.48)
+    try:
+      value_float = float(key)
+    except ValueError:
+      raise HTTPException(
+        status_code=422,
+        detail=f"ZA value '{key}' not convertible to system '{to_system}'",
+      )
+
+    nearest = self._nearest_key(value_float, list(mapping.keys()), prefer="lower")
+    if nearest is None or nearest not in mapping:
+      raise HTTPException(
+        status_code=422,
+        detail=f"ZA value '{key}' not convertible to system '{to_system}'",
+      )
+    return str(mapping[nearest])
 
   async def create_new_converter(
     self,
@@ -156,3 +178,27 @@ class ConversionRulesService:
     if not updated:
       raise HTTPException(status_code=404, detail="No current rule to close")
     return updated
+  
+  def _nearest_key(
+    self,
+    value: float,
+    keys: list[str],
+    prefer: str = "lower",
+  ) -> str:
+    nums = sorted(float(k) for k in keys)
+    best = nums[0]
+    best_dist = abs(value - best)
+
+    for x in nums[1:]:
+      d = abs(value - x)
+      if d < best_dist:
+        best, best_dist = x, d
+      elif d == best_dist:
+        if prefer == "lower":
+          best = min(best, x)
+        else:
+          best = max(best, x)
+
+    # devolver exactamente la key existente (string)
+    best_str = min(keys, key=lambda k: abs(float(k) - best))
+    return best_str
