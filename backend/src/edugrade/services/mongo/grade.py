@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from datetime import datetime, timezone, date
 from collections import defaultdict
-from typing import Any
 
 from bson import ObjectId
 from fastapi import HTTPException
@@ -32,8 +31,7 @@ class GradeService:
         v = payload.get(k)
         if not (isinstance(v, str) and is_objectid_hex(v)):
           raise HTTPException(status_code=400, detail=f"Invalid {k}")
-        
-      # Validaciones de strings / date
+
       try:
         system = non_empty_str(payload.get("system"), "system")
         country = non_empty_str(payload.get("country"), "country")
@@ -43,7 +41,6 @@ class GradeService:
       except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-      # Conversión a ZA
       value_converted_za = await self.conv.convert_to_za(
         value=value,
         system=system,
@@ -149,34 +146,39 @@ class GradeService:
   ) -> list[dict]:
     docs = await self.list_by_period(
       subject_id, student_id, institution_id,
-      date_to_datetime_utc(date_from), date_to_datetime_utc(date_to),
-      limit, skip)
+      date_from, date_to,
+      limit, skip
+    )
     return await self._project_many(docs, target_system)
 
   def _inject_display(self, doc: dict, display_value: str, display_system: str) -> dict:
     out = dict(doc)
+
+    v = out.get("date")
+    if isinstance(v, datetime):
+      out["date"] = v.date()
+
     out["displayValue"] = display_value
     out["displaySystem"] = display_system
     return out
 
   async def _project_one(self, doc: dict, target_system: str | None) -> dict:
     projected = await self._project_many([doc], target_system)
+    if not projected:
+      raise HTTPException(status_code=404, detail="Grade not found")
     return projected[0]
 
   async def _project_many(self, docs: list[dict], target_system: str | None) -> list[dict]:
+    out: list[dict] = []
+
     if target_system is None:
-      out: list[dict] = []
       for d in docs:
-        out.append(self._inject_display(d, d.get("value"), d.get("system")))
+        out.append(self._inject_display(d, str(d.get("value")), str(d.get("system"))))
       return out
 
-    try:
-      ts = non_empty_str(target_system, "targetSystem")
-    except ValueError as e:
-      raise HTTPException(status_code=400, detail=str(e))
+    ts = non_empty_str(target_system, "targetSystem")
 
     if ts == "ZA":
-      out: list[dict] = []
       for d in docs:
         vza = d.get("valueConverted")
         if vza is None:
@@ -184,54 +186,56 @@ class GradeService:
         out.append(self._inject_display(d, str(vza), "ZA"))
       return out
 
-    groups: dict[tuple[str, str, date], list[int]] = defaultdict(list)
+    for d in docs:
+      if d.get("system") == ts:
+        out.append(self._inject_display(d, str(d.get("value")), ts))
+      else:
+        out.append(d)
 
-    for idx, d in enumerate(docs):
+    if all("displayValue" in d for d in out):
+      return out
+
+    groups: dict[tuple[str, str, datetime], list[int]] = defaultdict(list)
+
+    for idx, d in enumerate(out):
+      if "displayValue" in d:
+        continue
+
       try:
         country = non_empty_str(d.get("country"), "country")
         grade = non_empty_str(d.get("grade"), "grade")
-        when = ensure_date(d.get("date"), "date")
+        vdate = d.get("date")
+        when_date = vdate.date() if isinstance(vdate, datetime) else ensure_date(vdate, "date")
+        when_dt = date_to_datetime_utc(when_date)
       except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-      groups[(country, grade, when)].append(idx)
+      groups[(country, grade, when_dt)].append(idx)
 
-    projected_values: list[str | None] = [None] * len(docs)
+    projected_values: list[str | None] = [None] * len(out)
 
-    for (country, grade, when), idxs in groups.items():
-      # OJO: en tu código pegado aparece "from_system" pero tu ConversionRulesService
-      # que mostraste usa "system=" en get_rule_for_date. Acá uso "system=".
-      rule = await self.conv.get_rule_for_date(
-        system=ts,
-        country=country,
-        grade=grade,
-        when=when,
-      )
-      mapping: dict[str, str] = rule["map"]
-
+    for (country, grade, when_dt), idxs in groups.items():
       for i in idxs:
-        vza = docs[i].get("valueConverted")
+        vza = out[i].get("valueConverted")
         if vza is None:
           raise HTTPException(status_code=500, detail="Grade missing valueConverted (ZA)")
 
-        projected_values[i] = self._inverse_lookup_no_invert(mapping, str(vza), ts)
+        projected_values[i] = await self.conv.convert_from_za(
+          value_za=str(vza),
+          to_system=ts,
+          country=country,
+          grade=grade,
+          when=when_dt,
+        )
 
-    out: list[dict] = []
-    for i, d in enumerate(docs):
-      out.append(self._inject_display(d, projected_values[i], ts))  # type: ignore[arg-type]
-    return out
+    final_out: list[dict] = []
+    for i, d in enumerate(out):
+      if "displayValue" in d:
+        final_out.append(d)
+      else:
+        dv = projected_values[i]
+        if dv is None:
+          raise HTTPException(status_code=500, detail="Projection failed (missing displayValue)")
+        final_out.append(self._inject_display(d, dv, ts))
 
-  def _inverse_lookup_no_invert(self, mapping: dict[str, str], value_za: str, target_system: str) -> str:
-    matches = [k for k, v in mapping.items() if str(v) == str(value_za)]
-
-    if not matches:
-      raise HTTPException(
-        status_code=422,
-        detail=f"ZA value '{value_za}' not convertible to system '{target_system}'",
-      )
-    if len(matches) > 1:
-      raise HTTPException(
-        status_code=409,
-        detail=f"Ambiguous inverse mapping for ZA value '{value_za}' in system '{target_system}'",
-      )
-    return matches[0]
+    return final_out
