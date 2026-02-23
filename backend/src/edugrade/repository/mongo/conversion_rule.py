@@ -1,4 +1,8 @@
-from datetime import date as date_type
+from __future__ import annotations
+
+from datetime import date as date_type, datetime
+from typing import Any
+
 from pymongo import ReturnDocument
 
 
@@ -8,11 +12,11 @@ class ConversionRuleRepository:
 
   async def ensure_indexes(self) -> None:
     await self.col.create_index(
-      [("system", 1), ("country", 1), ("grade", 1), ("validFrom", 1), ("validTo", 1)]
+      [("direction", 1), ("system", 1), ("country", 1), ("grade.min", 1), ("grade.max", 1), ("validFrom", 1), ("validTo", 1)]
     )
-    
+
     await self.col.create_index(
-      [("system", 1), ("country", 1), ("grade", 1), ("validTo", 1)],
+      [("direction", 1), ("system", 1), ("country", 1), ("grade.min", 1), ("grade.max", 1), ("validTo", 1)],
       unique=True,
       partialFilterExpression={"validTo": None},
     )
@@ -21,42 +25,85 @@ class ConversionRuleRepository:
     res = await self.col.insert_one(doc)
     return await self.col.find_one({"_id": res.inserted_id})
 
-  async def get_current(self, *, system: str, country: str, grade: str) -> dict | None:
-    return await self.col.find_one(
-      {"system": system, "country": country, "grade": grade, "validTo": None}
-    )
+  async def get_current(
+    self,
+    *,
+    direction: str,
+    system: str,
+    country: str | None,
+    grade: str,
+  ) -> dict | None:
+    q: dict[str, Any] = {
+      "direction": direction,
+      "system": system,
+      "grade.min": {"$lte": grade},
+      "grade.max": {"$gte": grade},
+      "validTo": None,
+    }
+    if country is not None:
+      q["$or"] = [{"country": country}, {"country": "ANY"}, {"country": {"$exists": False}}, {"country": None}]
+    else:
+      q["$or"] = [{"country": "ANY"}, {"country": {"$exists": False}}, {"country": None}]
+    return await self.col.find_one(q, sort=[("validFrom", -1)])
 
   async def get_for_date(
     self,
     *,
+    direction: str,
     system: str,
-    country: str,
+    country: str | None,
     grade: str,
-    when: date_type,
+    when: datetime,
   ) -> dict | None:
-    print(f"Finding conversion rule for system={system} country={country} grade={grade} when={when}")
-    return await self.col.find_one(
-      {
+    q: dict[str, Any] = {
+      "direction": direction,
       "system": system,
-      "country": country,
       "grade.min": {"$lte": grade},
       "grade.max": {"$gte": grade},
       "validFrom": {"$lte": when},
       "$or": [{"validTo": None}, {"validTo": {"$gte": when}}],
-      },
-      sort=[("validFrom", -1)],
-    )
+    }
+
+    if country is not None:
+      q["$and"] = [
+        {
+          "$or": [{"country": country}, {"country": "ANY"}, {"country": {"$exists": False}}, {"country": None}]
+        }
+      ]
+    else:
+      q["$and"] = [
+        {
+          "$or": [{"country": "ANY"}, {"country": {"$exists": False}}, {"country": None}]
+        }
+      ]
+
+    return await self.col.find_one(q, sort=[("validFrom", -1)])
 
   async def close_valid_to(
     self,
     *,
+    direction: str,
     system: str,
-    country: str,
+    country: str | None,
     grade: str,
-    valid_to: date_type,
+    valid_to: datetime,
   ) -> dict | None:
+    q: dict[str, Any] = {
+      "direction": direction,
+      "system": system,
+      "grade.min": {"$lte": grade},
+      "grade.max": {"$gte": grade},
+      "validTo": None,
+    }
+
+    if country is not None:
+      q["$or"] = [{"country": country}, {"country": "ANY"}, {"country": {"$exists": False}}, {"country": None}]
+    else:
+      q["$or"] = [{"country": "ANY"}, {"country": {"$exists": False}}, {"country": None}]
+
     return await self.col.find_one_and_update(
-      {"system": system, "country": country, "grade": grade, "validTo": None},
+      q,
       {"$set": {"validTo": valid_to}},
+      sort=[("validFrom", -1)],
       return_document=ReturnDocument.AFTER,
     )

@@ -1,9 +1,8 @@
 /* eslint-disable no-undef */
-print("🌱 Seeding MongoDB (minimal, aligned with Neo4j)...");
+print("🌱 Seeding MongoDB (ZA pivot rules)...");
 const dbx = db.getSiblingDB("edugrade");
 dbx.dropDatabase();
 print("✅ Dropped database edugrade");
-
 
 const inst_chl_secondary = ObjectId("c549bc38c0614170f01a2fef");
 const inst_arg_secondary = ObjectId("d2f1e3a4b5c67890abcdef12");
@@ -17,9 +16,9 @@ dbx.institutions.insertMany([
   { _id: inst_arg_secondary, name: "Instituto Dr. Jose Ingenieros", country: "ARG", address: "CABA, Argentina" },
   { _id: inst_uba, name: "Universidad de Buenos Aires", country: "ARG", address: "CABA, Argentina" },
   { _id: inst_uade, name: "Universidad Argentina de la Empresa", country: "ARG", address: "CABA, Argentina" },
-  { _id: inst_uk_inst, name: "University of Oxford", country: "UK", address: "Oxford, United Kingdom" },
-  { _id: inst_us_inst, name: "Massachusetts Institute of Technology", country: "US", address: "Cambridge, MA, USA" },
-  { _id: inst_de_inst, name: "Technische Universität München", country: "DE", address: "Munich, Germany" },
+  { _id: inst_uk_inst, name: "University of Oxford", country: "GBR", address: "Oxford, United Kingdom" },
+  { _id: inst_us_inst, name: "Massachusetts Institute of Technology", country: "USA", address: "Cambridge, MA, USA" },
+  { _id: inst_de_inst, name: "Technische Universität München", country: "DEU", address: "Munich, Germany" },
 ]);
 print("✅ Inserted institutions:", dbx.institutions.countDocuments());
 
@@ -53,59 +52,53 @@ dbx.options.updateOne(
         "22": "4th Year Undergraduate",
         "23": "Honours Degree",
         "24": "Master’s Degree",
-        "25": "Doctoral Degree (PhD)"
-      }
-    }
+        "25": "Doctoral Degree (PhD)",
+      },
+    },
   },
   { upsert: true }
 );
-dbx.options.insertOne({
-  key: "system",
-  response: {
-    "GBR": [
-      "GBR_ASTAR_F",
-      "GBR_GCSE",
-      "GBR_ALEVEL"
-    ],
-    "USA": [
-      "USA_LETTER_A_F",
-      "USA_GPA_0_4"
-    ],
-    "DEU": [
-      "DEU_1_6_INVERTED"
-    ],
-    "ARG": [
-      "ARG_1_10"
-    ]
-  }
-})
-print("✅ Upserted options");
 
-dbx.conversionRules.updateOne(
-  { system: "ARG_1_10", country: "ARG", grade: "12", validFrom: ISODate("2020-01-01T00:00:00.000Z") },
+dbx.options.updateOne(
+  { key: "system" },
   {
     $set: {
-      system: "ARG_1_10",
-      country: "ARG",
-      grade: { min: "0", max: "99" },
-      validFrom: ISODate("2020-01-01T00:00:00.000Z"),
-      validTo: null,
-
-      map: {
-        "1": "1",
-        "2": "1.5",
-        "3": "2",
-        "4": "2.5",
-        "5": "3",
-        "6": "4",
-        "7": "5",
-        "8": "5.5",
-        "9": "6",
-        "10": "7"
-      }
-    }
+      key: "system",
+      response: {
+        "GBR": ["GBR_ASTAR_F", "GBR_GCSE", "GBR_ALEVEL"],
+        "USA": ["USA_LETTER_A_F", "USA_GPA_0_4"],
+        "DEU": ["DEU_1_6_INVERTED"],
+        "ARG": ["ARG_1_10"],
+        "ZAF": ["ZA"],
+      },
+    },
   },
   { upsert: true }
 );
-print("✅ Upserted conversionRules:", dbx.conversionRules.countDocuments());
+
+print("✅ Upserted options");
+
+const validFrom = ISODate("2020-01-01T00:00:00.000Z");
+const createdAt = new Date();
+const gradeRange = { min: "0", max: "99" };
+
+dbx.conversionRules.insertMany([
+  { direction: "TO_ZA", system: "ARG_1_10", country: "ANY", grade: gradeRange, validFrom, validTo: null, createdAt, map: { "1":"1","2":"1.5","3":"2","4":"2.5","5":"3","6":"4","7":"5","8":"5.5","9":"6","10":"7" } },
+  { direction: "TO_ZA", system: "USA_GPA_0_4", country: "ANY", grade: gradeRange, validFrom, validTo: null, createdAt, map: { "4.0":"7","3.7":"6.5","3.3":"6","3.0":"5.5","2.7":"5","2.3":"4.5","2.0":"4","1.7":"3.5","1.3":"3","1.0":"2.5","0.0":"1" } },
+  { direction: "TO_ZA", system: "USA_LETTER_A_F", country: "ANY", grade: gradeRange, validFrom, validTo: null, createdAt, map: { "A":"7","A-":"6.5","B+":"6","B":"5.5","B-":"5","C+":"4.5","C":"4","C-":"3.5","D+":"3","D":"2.5","D-":"2","F":"1" } },
+  { direction: "TO_ZA", system: "DEU_1_6_INVERTED", country: "ANY", grade: gradeRange, validFrom, validTo: null, createdAt, map: { "1.0":"7","1.3":"6.5","1.7":"6","2.0":"5.5","2.3":"5","2.7":"4.5","3.0":"4","3.3":"3.5","3.7":"3","4.0":"2.5","4.3":"2","4.7":"1.5","5.0":"1","6.0":"0.5" } },
+  { direction: "TO_ZA", system: "GBR_ALEVEL", country: "ANY", grade: gradeRange, validFrom, validTo: null, createdAt, map: { "A*":"7","A":"6.5","B":"6","C":"5","D":"4","E":"3","U":"1" } },
+  { direction: "TO_ZA", system: "GBR_GCSE", country: "ANY", grade: gradeRange, validFrom, validTo: null, createdAt, map: { "1":"2","2":"2.5","3":"3","4":"4","5":"5","6":"5.5","7":"6","8":"6.5","9":"7","U":"1" } },
+  { direction: "TO_ZA", system: "GBR_ASTAR_F", country: "ANY", grade: gradeRange, validFrom, validTo: null, createdAt, map: { "A*":"7","A":"6.5","B":"6","C":"5","D":"4","E":"3","F":"2","U":"1" } },
+
+  { direction: "FROM_ZA", system: "ARG_1_10", country: "ANY", grade: gradeRange, validFrom, validTo: null, createdAt, map: { "1":"1","1.5":"2","2":"3","2.5":"4","3":"5","4":"6","5":"7","5.5":"8","6":"9","7":"10" } },
+  { direction: "FROM_ZA", system: "USA_GPA_0_4", country: "ANY", grade: gradeRange, validFrom, validTo: null, createdAt, map: { "7":"4.0","6.5":"3.7","6":"3.3","5.5":"3.0","5":"2.7","4.5":"2.3","4":"2.0","3.5":"1.7","3":"1.3","2.5":"1.0","1":"0.0" } },
+  { direction: "FROM_ZA", system: "USA_LETTER_A_F", country: "ANY", grade: gradeRange, validFrom, validTo: null, createdAt, map: { "7":"A","6.5":"A-","6":"B+","5.5":"B","5":"B-","4.5":"C+","4":"C","3.5":"C-","3":"D+","2.5":"D","2":"D-","1":"F" } },
+  { direction: "FROM_ZA", system: "DEU_1_6_INVERTED", country: "ANY", grade: gradeRange, validFrom, validTo: null, createdAt, map: { "7":"1.0","6.5":"1.3","6":"1.7","5.5":"2.0","5":"2.3","4.5":"2.7","4":"3.0","3.5":"3.3","3":"3.7","2.5":"4.0","2":"4.3","1.5":"4.7","1":"5.0","0.5":"6.0" } },
+  { direction: "FROM_ZA", system: "GBR_ALEVEL", country: "ANY", grade: gradeRange, validFrom, validTo: null, createdAt, map: { "7":"A*","6.5":"A","6":"B","5":"C","4":"D","3":"E","1":"U" } },
+  { direction: "FROM_ZA", system: "GBR_GCSE", country: "ANY", grade: gradeRange, validFrom, validTo: null, createdAt, map: { "2":"1","2.5":"2","3":"3","4":"4","5":"5","5.5":"6","6":"7","6.5":"8","7":"9","1":"U" } },
+  { direction: "FROM_ZA", system: "GBR_ASTAR_F", country: "ANY", grade: gradeRange, validFrom, validTo: null, createdAt, map: { "7":"A*","6.5":"A","6":"B","5":"C","4":"D","3":"E","2":"F","1":"U" } },
+]);
+
+print("✅ Inserted conversionRules:", dbx.conversionRules.countDocuments());
 print("✅ Seed completed successfully");
