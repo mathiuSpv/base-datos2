@@ -27,20 +27,23 @@ async def audit_log(
     audit_logger.log es sync y bloqueante (Cassandra Session.execute).
     Lo corremos en threadpool para no bloquear endpoints async.
     """
-    await run_in_threadpool(
-        audit_logger.log,
-        operation=operation,
-        db=db,
-        entity_type=entity_type,
-        entity_id=entity_id,
-        request_id=audit.request_id,
-        user_name=audit.user_name,
-        status=status,
-        latency_ms=latency_ms,
-        error_code=error_code,
-        error_message=error_message,
-        payload_summary=payload_summary,
-    )
+    try:
+        await run_in_threadpool(
+            audit_logger.log,
+            operation=operation,
+            db=db,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            request_id=audit.request_id,
+            user_name=audit.user_name,
+            status=status,
+            latency_ms=latency_ms,
+            error_code=error_code,
+            error_message=error_message,
+            payload_summary=payload_summary,
+        )
+    except Exception as e:
+        print(f"[audit] FAILED: {type(e).__name__}: {e}")
 
 
 async def audited(
