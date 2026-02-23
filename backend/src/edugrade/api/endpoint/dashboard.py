@@ -7,9 +7,7 @@ from edugrade.schemas.mongo.dashboard import DashboardOut, DashboardSubjectsOut
 from edugrade.services.mongo.dashboard import DashboardService
 from edugrade.services.neo4j_graph import get_neo4j_service, Neo4jGraphService
 
-
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
-
 
 def get_service(
   request: Request,
