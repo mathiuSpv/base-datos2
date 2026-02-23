@@ -1,6 +1,6 @@
 from edugrade.core.neo4j_db import get_neo4j_driver
 from edugrade.repository.neo4j_graph import Neo4jGraphRepository
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 class Neo4jGraphService:
     def __init__(self):
@@ -70,6 +70,35 @@ class Neo4jGraphService:
     
     def get_subjects_by_institution(self, institutionMongoId: str):
         return self.repo.get_subjects_by_institution(institutionMongoId)
+
+    def get_subjects_by_institution_student_interval(
+        self,
+        institutionMongoId: str,
+        studentMongoId: str,
+        dateFrom: str,
+        dateTo: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        return self.repo.get_subjects_by_institution_student_interval(
+            institutionMongoId=institutionMongoId,
+            studentMongoId=studentMongoId,
+            dateFrom=dateFrom,
+            dateTo=dateTo,
+        )
+    
+    def get_subjects_by_institution_student(
+        self,
+        institutionMongoId: str,
+        studentMongoId: str,
+    ) -> List[Dict[str, Any]]:
+        """
+        Devuelve las materias (Subjects) de una institución, SOLO si el estudiante
+        tiene relación STUDIES_AT con esa institución. Incluye grade si existe
+        relación TOOK (si no, grade = None).
+        """
+        return self.repo.get_subjects_by_institution_student(
+            institutionMongoId=institutionMongoId,
+            studentMongoId=studentMongoId,
+        )
     
     def get_students_by_institution(self, institutionMongoId: str):
         return self.repo.get_students_by_institution(institutionMongoId)
