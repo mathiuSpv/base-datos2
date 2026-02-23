@@ -1,0 +1,241 @@
+from __future__ import annotations
+
+from datetime import datetime, timezone, date
+from collections import defaultdict
+
+from bson import ObjectId
+from fastapi import HTTPException
+
+from edugrade.audit.context import AuditContext
+from edugrade.audit.exec import audited
+from edugrade.repository.mongo.grade import GradeRepository
+from edugrade.services.mongo.conversion_rules import ConversionRulesService
+from edugrade.utils.date import date_to_datetime_utc, ensure_date, ensure_date_range
+from edugrade.utils.object_id import is_objectid_hex, is_uuid
+from edugrade.utils.string import non_empty_str
+
+
+class GradeService:
+  def __init__(self, db, audit_logger):
+    self.repo = GradeRepository(db)
+    self.conv = ConversionRulesService(db)
+    self.audit_logger = audit_logger
+
+  async def create(self, payload: dict, audit: AuditContext) -> dict:
+    async def _do() -> dict:
+      subject_id = payload.get("subjectId")
+      if not (isinstance(subject_id, str) and is_uuid(subject_id)):
+        raise HTTPException(status_code=400, detail="Invalid subjectId")
+
+      for k in ("studentId", "institutionId"):
+        v = payload.get(k)
+        if not (isinstance(v, str) and is_objectid_hex(v)):
+          raise HTTPException(status_code=400, detail=f"Invalid {k}")
+
+      try:
+        system = non_empty_str(payload.get("system"), "system")
+        country = non_empty_str(payload.get("country"), "country")
+        grade = non_empty_str(payload.get("grade"), "grade")
+        value = non_empty_str(payload.get("value"), "value")
+        when = date_to_datetime_utc(ensure_date(payload.get("date"), "date"))
+      except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+      value_converted_za = await self.conv.convert_to_za(
+        value=value,
+        system=system,
+        country=country,
+        grade=grade,
+        when=when,
+      )
+
+      doc = dict(payload)
+      doc["date"] = when
+      doc["valueConverted"] = value_converted_za
+      doc["createdAt"] = datetime.now(timezone.utc)
+
+      return await self.repo.create(doc)
+
+    return await audited(
+      audit_logger=self.audit_logger,
+      audit=audit,
+      operation="CREATE",
+      db="mongo",
+      entity_type="Grade",
+      entity_id="(pending)",
+      payload_summary=(
+        "grade create; "
+        f"system={payload.get('system')} country={payload.get('country')} grade={payload.get('grade')}"
+      ),
+      fn=_do,
+      entity_id_from_result=lambda doc: str(doc.get("_id") or doc.get("id") or "(missing)"),
+    )
+
+  async def delete(self, grade_id: str, audit: AuditContext) -> None:
+    if not ObjectId.is_valid(grade_id):
+      raise HTTPException(status_code=400, detail="Invalid id")
+
+    async def _do() -> None:
+      ok = await self.repo.delete(ObjectId(grade_id))
+      if not ok:
+        raise HTTPException(status_code=404, detail="Grade not found")
+      return None
+
+    await audited(
+      audit_logger=self.audit_logger,
+      audit=audit,
+      operation="DELETE",
+      db="mongo",
+      entity_type="Grade",
+      entity_id=grade_id,
+      payload_summary="grade delete",
+      fn=_do,
+    )
+
+  async def get(self, grade_id: str) -> dict:
+    if not ObjectId.is_valid(grade_id):
+      raise HTTPException(status_code=400, detail="Invalid id")
+
+    doc = await self.repo.get_by_id(ObjectId(grade_id))
+    if not doc:
+      raise HTTPException(status_code=404, detail="Grade not found")
+    return doc
+
+  async def list_by_period(
+    self,
+    subject_id: str,
+    student_id: str,
+    institution_id: str,
+    date_from: date,
+    date_to: date,
+    limit: int,
+    skip: int,
+  ) -> list[dict]:
+    if not (is_uuid(subject_id) and is_objectid_hex(student_id) and is_objectid_hex(institution_id)):
+      raise HTTPException(status_code=400, detail="Invalid subjectId/studentId/institutionId")
+
+    try:
+      ensure_date_range(date_from, date_to)
+    except ValueError as e:
+      raise HTTPException(status_code=400, detail=str(e))
+
+    return await self.repo.list_by_period(
+      subject_id=subject_id,
+      student_id=student_id,
+      institution_id=institution_id,
+      date_from=date_to_datetime_utc(date_from),
+      date_to=date_to_datetime_utc(date_to),
+      limit=limit,
+      skip=skip,
+    )
+
+  async def get_projected(self, grade_id: str, target_system: str | None) -> dict:
+    doc = await self.get(grade_id)
+    return await self._project_one(doc, target_system)
+
+  async def list_projected(
+    self,
+    subject_id: str,
+    student_id: str,
+    institution_id: str,
+    date_from: date,
+    date_to: date,
+    limit: int,
+    skip: int,
+    target_system: str | None,
+  ) -> list[dict]:
+    docs = await self.list_by_period(
+      subject_id, student_id, institution_id,
+      date_from, date_to,
+      limit, skip
+    )
+    return await self._project_many(docs, target_system)
+
+  def _inject_display(self, doc: dict, display_value: str, display_system: str) -> dict:
+    out = dict(doc)
+
+    v = out.get("date")
+    if isinstance(v, datetime):
+      out["date"] = v.date()
+
+    out["displayValue"] = display_value
+    out["displaySystem"] = display_system
+    return out
+
+  async def _project_one(self, doc: dict, target_system: str | None) -> dict:
+    projected = await self._project_many([doc], target_system)
+    if not projected:
+      raise HTTPException(status_code=404, detail="Grade not found")
+    return projected[0]
+
+  async def _project_many(self, docs: list[dict], target_system: str | None) -> list[dict]:
+    out: list[dict] = []
+
+    if target_system is None:
+      for d in docs:
+        out.append(self._inject_display(d, str(d.get("value")), str(d.get("system"))))
+      return out
+
+    ts = non_empty_str(target_system, "targetSystem")
+
+    if ts == "ZA":
+      for d in docs:
+        vza = d.get("valueConverted")
+        if vza is None:
+          raise HTTPException(status_code=500, detail="Grade missing valueConverted (ZA)")
+        out.append(self._inject_display(d, str(vza), "ZA"))
+      return out
+
+    for d in docs:
+      if d.get("system") == ts:
+        out.append(self._inject_display(d, str(d.get("value")), ts))
+      else:
+        out.append(d)
+
+    if all("displayValue" in d for d in out):
+      return out
+
+    groups: dict[tuple[str, str, datetime], list[int]] = defaultdict(list)
+
+    for idx, d in enumerate(out):
+      if "displayValue" in d:
+        continue
+
+      try:
+        country = non_empty_str(d.get("country"), "country")
+        grade = non_empty_str(d.get("grade"), "grade")
+        vdate = d.get("date")
+        when_date = vdate.date() if isinstance(vdate, datetime) else ensure_date(vdate, "date")
+        when_dt = date_to_datetime_utc(when_date)
+      except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+      groups[(country, grade, when_dt)].append(idx)
+
+    projected_values: list[str | None] = [None] * len(out)
+
+    for (country, grade, when_dt), idxs in groups.items():
+      for i in idxs:
+        vza = out[i].get("valueConverted")
+        if vza is None:
+          raise HTTPException(status_code=500, detail="Grade missing valueConverted (ZA)")
+
+        projected_values[i] = await self.conv.convert_from_za(
+          value_za=str(vza),
+          to_system=ts,
+          country=country,
+          grade=grade,
+          when=when_dt,
+        )
+
+    final_out: list[dict] = []
+    for i, d in enumerate(out):
+      if "displayValue" in d:
+        final_out.append(d)
+      else:
+        dv = projected_values[i]
+        if dv is None:
+          raise HTTPException(status_code=500, detail="Projection failed (missing displayValue)")
+        final_out.append(self._inject_display(d, dv, ts))
+
+    return final_out

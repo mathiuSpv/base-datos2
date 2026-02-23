@@ -1,16 +1,13 @@
 name: edugrade
-
 networks:
   edugrade-net:
     driver: bridge
-
 volumes:
-  mongo_data:
-  neo4j_data:
-  neo4j_logs:
-  cassandra_data:
-  redis_data:
-
+  mongo_data: null
+  neo4j_data: null
+  neo4j_logs: null
+  cassandra_data: null
+  redis_data: null
 services:
   mongodb:
     image: mongo:7.0
@@ -20,66 +17,100 @@ services:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: rootpass
     ports:
-      - "27018:27017"
+    - 27018:27017
     volumes:
-      - mongo_data:/data/db
+    - mongo_data:/data/db
     networks:
-      - edugrade-net
+    - edugrade-net
     healthcheck:
-      test: ["CMD-SHELL", "mongosh --quiet -u root -p rootpass --authenticationDatabase admin --eval 'db.adminCommand({ ping: 1 }).ok' | grep 1"]
+      test:
+      - CMD-SHELL
+      - 'mongosh --quiet -u root -p rootpass --authenticationDatabase admin --eval
+        ''db.adminCommand({ ping: 1 }).ok'' | grep 1'
       interval: 10s
       timeout: 5s
       retries: 20
-
+  mongo-seed:
+    image: mongo:7.0
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    volumes:
+    - ./seed:/seed:ro
+    entrypoint: bash -c "mongosh 'mongodb://root:rootpass@mongodb:27017/edugrade?authSource=admin'
+      /seed/seed.js"
+    networks:
+    - edugrade-net
+    restart: 'no'
   neo4j:
     image: neo4j:5.22
     container_name: edugrade-neo4j
     restart: unless-stopped
     environment:
-      NEO4J_AUTH: "neo4j/neo4jpass"
+      NEO4J_AUTH: neo4j/neo4jpass
     ports:
-      - "7474:7474"
-      - "7687:7687" 
+    - 7474:7474
+    - 7687:7687
     volumes:
-      - neo4j_data:/data
-      - neo4j_logs:/logs
+    - neo4j_data:/data
+    - neo4j_logs:/logs
     networks:
-      - edugrade-net
+    - edugrade-net
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:7474/ | grep -i neo4j >/dev/null || exit 1"]
+      test:
+      - CMD-SHELL
+      - wget -qO- http://localhost:7474/ | grep -i neo4j >/dev/null || exit 1
       interval: 10s
       timeout: 5s
       retries: 30
-
   cassandra:
     image: cassandra:4.1
     container_name: edugrade-cassandra
     restart: unless-stopped
     ports:
-      - "9042:9042"
+    - 9042:9042
     volumes:
-      - cassandra_data:/var/lib/cassandra
+    - cassandra_data:/var/lib/cassandra
     networks:
-      - edugrade-net
+    - edugrade-net
     healthcheck:
-      test: ["CMD-SHELL", "cqlsh -e 'DESCRIBE KEYSPACES' localhost 9042 >/dev/null 2>&1"]
+      test:
+      - CMD-SHELL
+      - cqlsh -e 'DESCRIBE KEYSPACES' localhost 9042 >/dev/null 2>&1
       interval: 15s
       timeout: 10s
       retries: 30
-
   redis:
     image: redis:7.2
     container_name: edugrade-redis
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
+    command:
+    - redis-server
+    - --appendonly
+    - 'yes'
     ports:
-      - "6379:6379"
+    - 6379:6379
     volumes:
-      - redis_data:/data
+    - redis_data:/data
     networks:
-      - edugrade-net
+    - edugrade-net
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test:
+      - CMD
+      - redis-cli
+      - ping
       interval: 10s
       timeout: 3s
       retries: 20
+  neo4j-seed:
+    image: neo4j:5.22
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    volumes:
+    - ./seed:/seed:ro
+    entrypoint: bash -c "cypher-shell -a bolt://neo4j:7687 -u neo4j -p neo4jpass -f
+      /seed/neo4j/seed.cypher"
+    networks:
+    - edugrade-net
+    restart: 'no'

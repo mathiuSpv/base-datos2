@@ -1,56 +1,81 @@
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request
 from edugrade.config import settings
 from edugrade.startup import lifespan
+from edugrade.api.router import router as api_router
+from edugrade.audit.routes import router as audit_router
+from edugrade.audit.middleware import request_context_middleware
+from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title=settings.app_name, lifespan=lifespan)
+app = FastAPI(
+    title=settings.app_name, 
+    lifespan=lifespan,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(api_router)
+
+app.middleware("http")(request_context_middleware)
+app.include_router(audit_router)
+
 
 @app.get("/health")
 async def health(request: Request):
-    results = {}
+    results: dict[str, object] = {}
 
+    # Mongo
     try:
         await request.app.state.mongo_client.admin.command("ping")
         results["mongo"] = "ok"
     except Exception as e:
-        results["mongo"] = {
-            "type": type(e).__name__,
-            "message": str(e),
-            "repr": repr(e),
-        }
+        results["mongo"] = {"type": type(e).__name__, "message": str(e), "repr": repr(e)}
 
+    # Neo4j
     try:
         with request.app.state.neo4j_driver.session() as session:
             session.run("RETURN 1").single()
         results["neo4j"] = "ok"
     except Exception as e:
-        results["neo4j"] = {
-            "type": type(e).__name__,
-            "message": str(e),
-            "repr": repr(e),
-        }
+        results["neo4j"] = {"type": type(e).__name__, "message": str(e), "repr": repr(e)}
 
+    # Cassandra
     try:
         row = request.app.state.cassandra_session.execute("SELECT now() FROM system.local").one()
         _ = row[0] if row else None
         results["cassandra"] = "ok"
     except Exception as e:
-        results["cassandra"] = {
-            "type": type(e).__name__,
-            "message": str(e),
-            "repr": repr(e),
-        }
-        
+        results["cassandra"] = {"type": type(e).__name__, "message": str(e), "repr": repr(e)}
+
+    # Redis
     try:
         pong = await request.app.state.redis.ping()
         results["redis"] = "ok" if pong else "error: ping_failed"
     except Exception as e:
-        results["redis"] = {
-            "type": type(e).__name__,
-            "message": str(e),
-            "repr": repr(e),
-        }
+        results["redis"] = {"type": type(e).__name__, "message": str(e), "repr": repr(e)}
 
-    if any(v != "ok" for v in results.values()):
-        raise HTTPException(status_code=503, detail={"status": "degraded", "checks": results})
+    status_values = list(results.values())
 
-    return {"status": "ok", "app": settings.app_name, "checks": results}
+    if all(v == "ok" for v in status_values):
+        status = "ok"
+    elif all(v != "ok" for v in status_values):
+        status = "off"
+    else:
+        status = "degraded"
+
+    payload = {"status": status, "checks": results}
+    if status == "ok":
+        payload["app"] = settings.app_name
+
+    return payload
