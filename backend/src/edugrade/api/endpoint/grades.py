@@ -22,7 +22,6 @@ async def create_exam(
   return await svc.create(payload.model_dump(), audit=audit)
 
 
-# ✅ CAMBIO: ahora devuelve también displayValue/displaySystem
 @router.get("/{exam_id}", response_model=GradeOutDisplay)
 async def get_exam(
   exam_id: str,
@@ -35,7 +34,6 @@ async def get_exam(
   return await svc.get_projected(exam_id, targetSystem)
 
 
-# ✅ CAMBIO: lista proyectada con displayValue/displaySystem
 @router.get("", response_model=list[GradeOutDisplay])
 async def list_exams(
   subjectId: str = Query(..., min_length=1),
