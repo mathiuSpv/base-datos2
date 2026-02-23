@@ -422,3 +422,16 @@ class Neo4jGraphRepository:
         with self.driver.session() as session:
             res = session.run(cypher, {"studentMongoId": studentMongoId})
             return [record.data() for record in res]
+    
+    def get_subjects_by_ids(self, subjectIds: list[str]) -> list[dict]:
+        if not subjectIds:
+            return []
+
+        cypher = f"""
+        MATCH (sub:{LABEL_SUBJECT})
+        WHERE sub.id IN $subjectIds
+        RETURN sub.id AS id, sub.name AS name
+        """
+        with self.driver.session() as session:
+            res = session.run(cypher, {"subjectIds": subjectIds})
+            return [dict(r) for r in res]

@@ -44,3 +44,109 @@ class GradeRepository:
     )
     
     return [doc async for doc in cursor]
+  
+  async def delete(self, _id: ObjectId) -> bool:
+    res = await self.col.delete_one({"_id": _id})
+    return res.deleted_count == 1
+
+  async def dashboard_summary(self, *, country: str, institution_id: str | None) -> dict:
+    match_q: dict = {"country": country}
+    if institution_id is not None:
+      match_q["institutionId"] = institution_id
+
+    pipeline = [
+      {"$match": match_q},
+      {
+        "$addFields": {
+          "_valueZA": {
+            "$convert": {
+              "input": "$valueConverted",
+              "to": "double",
+              "onError": None,
+              "onNull": None,
+            }
+          }
+        }
+      },
+      {
+        "$group": {
+          "_id": None,
+          "examsRead": {"$sum": 1},
+          "examsUsedInAverage": {"$sum": {"$cond": [{"$ne": ["$_valueZA", None]}, 1, 0]}},
+          "sumZA": {"$sum": {"$ifNull": ["$_valueZA", 0]}},
+        }
+      },
+      {
+        "$project": {
+          "_id": 0,
+          "examsRead": 1,
+          "examsUsedInAverage": 1,
+          "averageZA": {
+            "$cond": [
+              {"$gt": ["$examsUsedInAverage", 0]},
+              {"$divide": ["$sumZA", "$examsUsedInAverage"]},
+              None,
+            ]
+          },
+        }
+      },
+    ]
+
+    cursor = self.col.aggregate(pipeline)
+    rows = [doc async for doc in cursor]
+    if not rows:
+      return {"examsRead": 0, "examsUsedInAverage": 0, "averageZA": None}
+    row = rows[0]
+    if row.get("averageZA") is not None:
+      row["averageZA"] = float(row["averageZA"])
+    return row
+
+  async def dashboard_subjects(self, *, country: str, institution_id: str) -> list[dict]:
+    match_q = {"country": country, "institutionId": institution_id}
+
+    pipeline = [
+      {"$match": match_q},
+      {
+        "$addFields": {
+          "_valueZA": {
+            "$convert": {
+              "input": "$valueConverted",
+              "to": "double",
+              "onError": None,
+              "onNull": None,
+            }
+          }
+        }
+      },
+      {
+        "$group": {
+          "_id": "$subjectId",
+          "examsRead": {"$sum": 1},
+          "examsUsedInAverage": {"$sum": {"$cond": [{"$ne": ["$_valueZA", None]}, 1, 0]}},
+          "sumZA": {"$sum": {"$ifNull": ["$_valueZA", 0]}},
+        }
+      },
+      {
+        "$project": {
+          "_id": 0,
+          "subjectId": "$_id",
+          "examsRead": 1,
+          "examsUsedInAverage": 1,
+          "averageZA": {
+            "$cond": [
+              {"$gt": ["$examsUsedInAverage", 0]},
+              {"$divide": ["$sumZA", "$examsUsedInAverage"]},
+              None,
+            ]
+          },
+        }
+      },
+      {"$sort": {"subjectId": 1}},
+    ]
+
+    cursor = self.col.aggregate(pipeline)
+    out = [doc async for doc in cursor]
+    for d in out:
+      if d.get("averageZA") is not None:
+        d["averageZA"] = float(d["averageZA"])
+    return out

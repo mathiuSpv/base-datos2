@@ -82,6 +82,9 @@ class Neo4jGraphService:
 
     def get_student_subject_rows(self, studentMongoId: str) -> List[Dict[str, Any]]:
         return self.repo.get_student_subject_rows(studentMongoId)
+    
+    def get_subjects_by_ids(self, subjectIds: list[str]):
+        return self.repo.get_subjects_by_ids(subjectIds)
 
     # def recommend_subjects_for_student(self, studentId: str, limit: int = 10):
     #     return self.repo.recommend_subjects_for_student(studentId, limit)
