@@ -415,8 +415,10 @@ class Neo4jGraphRepository:
         RETURN
         sub.id AS subjectId,
         sub.name AS subjectName,
+        sub.institutionMongoId AS institutionMongoId,
         r.startDate AS subjectStartDate,
-        r.endDate AS subjectEndDate
+        r.endDate AS subjectEndDate,
+        r.grade AS grade
         ORDER BY subjectStartDate ASC
         """
         with self.driver.session() as session:
@@ -434,4 +436,74 @@ class Neo4jGraphRepository:
         """
         with self.driver.session() as session:
             res = session.run(cypher, {"subjectIds": subjectIds})
+            return [dict(r) for r in res]
+
+
+    def get_subjects_by_institution_student_interval(
+        self,
+        institutionMongoId: str,
+        studentMongoId: str,
+        dateFrom: str,
+        dateTo: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        cypher = f"""
+        MATCH (s:{LABEL_STUDENT} {{mongoId: $studentMongoId}})
+        MATCH (i:{LABEL_INSTITUTION} {{mongoId: $institutionMongoId}})
+        MATCH (s)-[e:{REL_STUDIES_AT}]->(i)
+
+        WITH i, e,
+            date($dateFrom) AS qFrom,
+            coalesce(date($dateTo), date()) AS qTo,
+            date(e.startDate) AS eFrom,
+            coalesce(date(e.endDate), date()) AS eTo
+        WHERE eFrom <= qTo AND qFrom <= eTo
+
+        MATCH (sub:{LABEL_SUBJECT} {{institutionMongoId: $institutionMongoId}})
+        RETURN sub.id AS id, sub.name AS name, sub.institutionMongoId AS institutionMongoId
+        ORDER BY toLower(sub.name) ASC
+        """
+
+        params = {
+            "studentMongoId": studentMongoId,
+            "institutionMongoId": institutionMongoId,
+            "dateFrom": dateFrom,
+            "dateTo": dateTo,
+        }
+
+        with self.driver.session() as session:
+            res = session.run(cypher, params)
+            return [dict(r) for r in res]
+        
+    def get_subjects_by_institution_student(
+        self,
+        institutionMongoId: str,
+        studentMongoId: str,
+    ) -> List[Dict[str, Any]]:
+        cypher = f"""
+        MATCH (s:{LABEL_STUDENT} {{mongoId: $studentMongoId}})
+        MATCH (i:{LABEL_INSTITUTION} {{mongoId: $institutionMongoId}})
+
+        // validar que el estudiante haya estado/esté en esa institución
+        MATCH (s)-[:{REL_STUDIES_AT}]->(i)
+
+        MATCH (sub:{LABEL_SUBJECT} {{institutionMongoId: $institutionMongoId}})
+
+        OPTIONAL MATCH (s)-[t:{REL_TOOK}]->(sub)
+
+        RETURN 
+            sub.id AS id,
+            sub.name AS name,
+            sub.institutionMongoId AS institutionMongoId,
+            t.grade AS grade
+
+        ORDER BY toLower(sub.name) ASC
+        """
+
+        params = {
+            "studentMongoId": studentMongoId,
+            "institutionMongoId": institutionMongoId,
+        }
+
+        with self.driver.session() as session:
+            res = session.run(cypher, params)
             return [dict(r) for r in res]
