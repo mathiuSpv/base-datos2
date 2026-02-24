@@ -65,6 +65,6 @@ Write-Host "==> Current status:"
 docker compose -f $composeFile ps
 
 # 6) Logs del seeder para confirmar inserción
-Write-Host "==> Seeder logs:"
-docker compose -f $composeFile logs --no-color mongo-seed
+Write-Host "==> Seeder Basic"
+docker compose -f $composeFile logs --no-color mongo-init-data
 Write-Host "==> Done."

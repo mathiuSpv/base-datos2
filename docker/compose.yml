@@ -30,10 +30,15 @@ services:
       interval: 10s
       timeout: 5s
       retries: 20
-  mongo-seed:
+  mongo-init-data:
     image: mongo:7.0
+    container_name: edugrade-mongo-init
     depends_on:
       mongodb:
+        condition: service_healthy
+      cassandra:
+        condition: service_healthy
+      neo4j:
         condition: service_healthy
     volumes:
     - ./seed:/seed:ro
@@ -80,37 +85,3 @@ services:
       interval: 15s
       timeout: 10s
       retries: 30
-  redis:
-    image: redis:7.2
-    container_name: edugrade-redis
-    restart: unless-stopped
-    command:
-    - redis-server
-    - --appendonly
-    - 'yes'
-    ports:
-    - 6379:6379
-    volumes:
-    - redis_data:/data
-    networks:
-    - edugrade-net
-    healthcheck:
-      test:
-      - CMD
-      - redis-cli
-      - ping
-      interval: 10s
-      timeout: 3s
-      retries: 20
-  neo4j-seed:
-    image: neo4j:5.22
-    depends_on:
-      neo4j:
-        condition: service_healthy
-    volumes:
-    - ./seed:/seed:ro
-    entrypoint: bash -c "cypher-shell -a bolt://neo4j:7687 -u neo4j -p neo4jpass -f
-      /seed/neo4j/seed.cypher"
-    networks:
-    - edugrade-net
-    restart: 'no'

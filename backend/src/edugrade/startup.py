@@ -53,14 +53,6 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"[startup] Cassandra disabled: {type(e).__name__}: {e}")
     
-    app.state.redis = None
-    try:
-        redis_client = redis.from_url(settings.redis_url, decode_responses=True)
-        await redis_client.ping()
-        app.state.redis = redis_client
-    except Exception as e:
-        print(f"[startup] Redis disabled: {type(e).__name__}: {e}")
-
     try:
         yield
     finally:
@@ -75,6 +67,3 @@ async def lifespan(app: FastAPI):
 
         if app.state.cassandra_cluster:
             app.state.cassandra_cluster.shutdown()
-
-        if app.state.redis:
-            await app.state.redis.close()
