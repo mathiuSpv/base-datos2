@@ -4,24 +4,6 @@ const dbx = db.getSiblingDB("edugrade");
 dbx.dropDatabase();
 print("✅ Dropped database edugrade");
 
-const inst_chl_secondary = ObjectId("c549bc38c0614170f01a2fef");
-const inst_arg_secondary = ObjectId("d2f1e3a4b5c67890abcdef12");
-const inst_uba = ObjectId("501b6ff69b36d251d142e796");
-const inst_uade = ObjectId("6aa06d4942ac05800eb4b57f");
-const inst_uk_inst = ObjectId("07cc736e090e75966d562a9b");
-const inst_us_inst = ObjectId("1cd767efc7bae3e6bd19574d");
-const inst_de_inst = ObjectId("9802a6b16aba871af182b6cb");
-
-dbx.institutions.insertMany([
-  { _id: inst_arg_secondary, name: "Instituto Dr. Jose Ingenieros", country: "ARG", address: "CABA, Argentina" },
-  { _id: inst_uba, name: "Universidad de Buenos Aires", country: "ARG", address: "CABA, Argentina" },
-  { _id: inst_uade, name: "Universidad Argentina de la Empresa", country: "ARG", address: "CABA, Argentina" },
-  { _id: inst_uk_inst, name: "University of Oxford", country: "GBR", address: "Oxford, United Kingdom" },
-  { _id: inst_us_inst, name: "Massachusetts Institute of Technology", country: "USA", address: "Cambridge, MA, USA" },
-  { _id: inst_de_inst, name: "Technische Universität München", country: "DEU", address: "Munich, Germany" },
-]);
-print("✅ Inserted institutions:", dbx.institutions.countDocuments());
-
 dbx.options.updateOne(
   { key: "grade" },
   {
@@ -95,7 +77,7 @@ dbx.options.updateOne(
 
 print("✅ Upserted options");
 
-const validFrom = ISODate("2020-01-01T00:00:00.000Z");
+const validFrom = ISODate("2000-01-01T00:00:00.000Z");
 const createdAt = new Date();
 const gradeRange = { min: "0", max: "99" };
 
