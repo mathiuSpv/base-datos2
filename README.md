@@ -33,7 +33,7 @@ uv sync
 uv run uvicorn edugrade.main:app --reload --app-dir src
 ```
 
-## 6) Populate de Datos
+## 6) Populate de Datos (OJO CON EL DIR FOLDER)
 ```bash
-python docker/seed/api_caller.py --base-url http://localhost:8000 --seed 123  
+python docker/seed/api_caller_seed.py --base-url http://localhost:8000 --seed 123  
 ```
