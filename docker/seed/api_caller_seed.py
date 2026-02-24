@@ -36,17 +36,17 @@ import httpx
 # ============================================================
 #  Ajustes principales (base) + jitter "con sentido"
 # ============================================================
-AMOUNT_STUDENT = 30
-AMOUNT_INSTITUTIONS = 10
+AMOUNT_STUDENT = 100
+AMOUNT_INSTITUTIONS = 15
 AMOUNT_SUBJECTS = 300
 AMOUNT_EXAMS = 500
 
 # cuánto puede variar cada cantidad respecto del base (ej. 0.25 = ±25%)
 JITTER = {
   "students": 0.20,
-  "institutions": 0.25,
-  "subjects": 0.15,
-  "exams": 0.20,
+  "institutions": 0.15,
+  "subjects": 0.20,
+  "exams": 0.50,
 }
 
 
@@ -54,7 +54,6 @@ JITTER = {
 #  Country ISO-3 permitido + sistemas por país (materias/exams)
 # ============================================================
 COUNTRIES_ISO3 = {
-  "ZAF": "South Africa",
   "GBR": "United Kingdom",
   "USA": "United States of America",
   "DEU": "Germany",
@@ -117,12 +116,8 @@ valueExams = {
     ],
 
     "GBR_ALEVEL": ["A*","A","B","C","D","E","U"],
-
     "GBR_GCSE": ["1","2","3","4","5","6","7","8","9","U"],
-
     "GBR_ASTAR_F": ["A*","A","B","C","D","E","F","U"],
-
-    # escala ZA (por si algún system es ZA)
     "ZA": ["1","1.5","2","2.5","3","3.5","4","4.5","5","5.5","6","6.5","7"]
 }
 
@@ -243,7 +238,6 @@ class Api:
 
   # ---- Exams ----
   def create_exam(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-    print(payload)
     r = self.client.post("/api/exams", json=payload)
     r.raise_for_status()
     return r.json()
@@ -480,7 +474,6 @@ def main():
         inst_id, subj, start_d, end_d = rchoice(pool)
         end_effective = end_d or today
         exam_date = rand_date_between(start_d, end_effective)
-
         inst_country = inst_by_id[inst_id]["country"]  # ISO-3
         system = rchoice(SYSTEMS_BY_COUNTRY[inst_country])
 

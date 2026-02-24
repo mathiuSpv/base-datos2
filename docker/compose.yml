@@ -36,6 +36,10 @@ services:
     depends_on:
       mongodb:
         condition: service_healthy
+      cassandra:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
     volumes:
     - ./seed:/seed:ro
     entrypoint: bash -c "mongosh 'mongodb://root:rootpass@mongodb:27017/edugrade?authSource=admin'
@@ -81,25 +85,3 @@ services:
       interval: 15s
       timeout: 10s
       retries: 30
-  redis:
-    image: redis:7.2
-    container_name: edugrade-redis
-    restart: unless-stopped
-    command:
-    - redis-server
-    - --appendonly
-    - 'yes'
-    ports:
-    - 6379:6379
-    volumes:
-    - redis_data:/data
-    networks:
-    - edugrade-net
-    healthcheck:
-      test:
-      - CMD
-      - redis-cli
-      - ping
-      interval: 10s
-      timeout: 3s
-      retries: 20

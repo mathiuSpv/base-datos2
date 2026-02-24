@@ -77,7 +77,7 @@ dbx.options.updateOne(
 
 print("✅ Upserted options");
 
-const validFrom = ISODate("2000-01-01T00:00:00.000Z");
+const validFrom = ISODate("1900-01-01T00:00:00.000Z");
 const createdAt = new Date();
 const gradeRange = { min: "0", max: "99" };
 
@@ -89,7 +89,7 @@ dbx.conversionRules.insertMany([
   { direction: "TO_ZA", system: "GBR_ALEVEL", country: "ANY", grade: gradeRange, validFrom, validTo: null, createdAt, map: { "A*": "7", "A": "6.5", "B": "6", "C": "5", "D": "4", "E": "3", "U": "1" } },
   { direction: "TO_ZA", system: "GBR_GCSE", country: "ANY", grade: gradeRange, validFrom, validTo: null, createdAt, map: { "1": "2", "2": "2.5", "3": "3", "4": "4", "5": "5", "6": "5.5", "7": "6", "8": "6.5", "9": "7", "U": "1" } },
   { direction: "TO_ZA", system: "GBR_ASTAR_F", country: "ANY", grade: gradeRange, validFrom, validTo: null, createdAt, map: { "A*": "7", "A": "6.5", "B": "6", "C": "5", "D": "4", "E": "3", "F": "2", "U": "1" } },
-
+  
   { direction: "FROM_ZA", system: "ARG_1_10", country: "ANY", grade: gradeRange, validFrom, validTo: null, createdAt, map: { "1": "1", "1.5": "2", "2": "3", "2.5": "4", "3": "5", "4": "6", "5": "7", "5.5": "8", "6": "9", "7": "10" } },
   { direction: "FROM_ZA", system: "USA_GPA_0_4", country: "ANY", grade: gradeRange, validFrom, validTo: null, createdAt, map: { "7": "4.0", "6.5": "3.7", "6": "3.3", "5.5": "3.0", "5": "2.7", "4.5": "2.3", "4": "2.0", "3.5": "1.7", "3": "1.3", "2.5": "1.0", "1": "0.0" } },
   { direction: "FROM_ZA", system: "USA_LETTER_A_F", country: "ANY", grade: gradeRange, validFrom, validTo: null, createdAt, map: { "7": "A", "6.5": "A-", "6": "B+", "5.5": "B", "5": "B-", "4.5": "C+", "4": "C", "3.5": "C-", "3": "D+", "2.5": "D", "2": "D-", "1": "F" } },

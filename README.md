@@ -5,7 +5,6 @@ Stack:
 - MongoDB (Docker)
 - Neo4j (Docker)
 - Cassandra (Docker)
-- Redis (Docker)
 
 ## 1) Levantar las 4 DB
 ```bash
@@ -32,4 +31,9 @@ uv sync
 ## 5) Levantar el Backend
 ```bash
 uv run uvicorn edugrade.main:app --reload --app-dir src
+```
+
+## 6) Populate de Datos
+```bash
+python docker/seed/api_caller.py --base-url http://localhost:8000 --seed 123  
 ```
